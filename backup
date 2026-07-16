@@ -1,0 +1,1566 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Somengil - Operations & Installations Dashboard</title>
+
+    <!-- Google Fonts: Archivo & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Leaflet JS for Premium Dark Maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Tailwind CSS (for layout and utility styling)  -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        :root {
+            /* Fundos — hierarquia em 3 níveis: fundo < painel < cartão  */
+            --bg-deep: radial-gradient(circle at center, rgba(81, 184, 234, 1) 0%, rgba(0, 0, 0, 1) 100%);
+            --bg-panel: #4a4c53;       /* base dos painéis */
+            --bg-panel-2: #01040a;     /* cartões internos */
+            --bg-elev: #3a5a92;        /* elementos elevados / hover */
+
+            /* Linhas / bordas — mais visíveis para separar campos */
+            --line: rgba(140, 165, 210, 0.18);
+            --line-strong: rgba(140, 165, 210, 0.30);
+
+            /* Texto */
+            --txt: #f5f5f5;
+            --txt-mute: #8A99B5;
+            --txt-faint: #d3d8e0;
+
+            /* Acento Somengil (azul claro -> azul escuro) */
+            --acc-1: #51B8EA;
+            --acc-2: #1B4794;
+            --acc-grad: linear-gradient(90deg, #51B8EA 0%, #1B4794 100%);
+
+            /* Estados */
+            --ok: #34D399;
+            --warn: #FBBF24;
+            --bad: #F87171;
+            --idle: #475067;
+        }
+
+        * { box-sizing: border-box; }
+
+        html, body {
+            margin: 0;
+            height: 100%;
+            overflow: hidden;                 /* ecrã de parede: sem scroll global */
+            background: var(--bg-deep);
+            color: var(--txt);
+            font-family: 'Archivo', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Textura subtil de fundo: grelha técnica + brilho radial */
+        body::before {
+            content: "";
+            position: fixed; inset: 0; z-index: 0; pointer-events: none;
+            background-image:
+                radial-gradient(circle at 18% 12%, rgba(81,184,234,0.08), transparent 42%),
+                radial-gradient(circle at 92% 88%, rgba(27,71,148,0.12), transparent 45%),
+                linear-gradient(rgba(0,0,0,0.10) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,0,0,0.10) 1px, transparent 1px);
+            background-size: 100% 100%, 100% 100%, 38px 38px, 38px 38px;
+        }
+
+        .mono { font-family: 'JetBrains Mono', monospace; }
+
+        .app {
+            position: relative; z-index: 1;
+            height: 100vh;
+            display: flex; flex-direction: column;
+            padding: 14px;
+            gap: 12px;
+        }
+
+        /* ----- Barra de topo ----- */
+        .topbar {
+            flex: 0 0 auto;
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 16px;
+            padding: 12px 20px;
+            background: linear-gradient(180deg, rgba(24,35,59,0.95), rgba(14,21,38,0.98));
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            backdrop-filter: blur(8px);
+        }
+        .brand { display: flex; align-items: center; gap: 16px; min-width: 0; }
+        .brand-logo {
+            height: 38px; width: auto; display: block;
+            object-fit: contain;
+        }
+        .brand-info {
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid var(--line);
+            padding-left: 16px;
+        }
+        .brand h1 {
+            margin: 0; font-size: 16px; font-weight: 800; letter-spacing: 0.16em;
+            text-transform: uppercase; line-height: 1.1;
+            color: #fff;
+        }
+        .brand p {
+            margin: 4px 0 0; font-size: 9px; font-weight: 700; letter-spacing: 0.24em;
+            text-transform: uppercase; color: var(--txt-mute);
+        }
+        .topbar-right { display: flex; align-items: center; gap: 20px; flex: 0 0 auto; }
+        
+        .live {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 10px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
+            color: var(--ok);
+        }
+        .live .dot {
+            width: 9px; height: 9px; border-radius: 50%; background: var(--ok);
+            box-shadow: 0 0 0 0 rgba(52,211,153,0.6);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%   { box-shadow: 0 0 0 0 rgba(52,211,153,0.6); }
+            70%  { box-shadow: 0 0 0 10px rgba(52,211,153,0); }
+            100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); }
+        }
+
+        /* Filter Selector */
+        .header-filter {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            color: var(--txt);
+            font-size: 11px;
+            font-weight: 600;
+            padding: 6px 14px;
+            outline: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .header-filter:hover {
+            border-color: var(--acc-1);
+            background: rgba(255, 255, 255, 0.08);
+        }
+        .header-filter option {
+            background: var(--bg-panel-2);
+            color: var(--txt);
+        }
+
+        .clock { text-align: right; }
+        .clock .t { font-size: 22px; font-weight: 800; line-height: 1; letter-spacing: 0.04em; font-family: 'JetBrains Mono', monospace; color: var(--acc-1); }
+        .clock .d { font-size: 9px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--txt-mute); margin-top: 3px; }
+
+        /* ----- STREAMING_CHUNK: Estilização da Fileira de KPIs do Topo com Imagem de Fundo ----- */
+        .kpis-top-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 10px;
+            flex: 0 0 auto;
+        }
+        .kpi-top {
+            background-image: linear-gradient(rgba(30, 42, 61, 0.45), rgba(14, 21, 38, 0.75)), 
+                              url(https://static.wixstatic.com/media/a6967f_7bda25cf04b746f3bfbfcc452775f0a7~mv2.png);
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .kpi-top::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 12%; height: 76%; width: 3px;
+            background: var(--idle);
+            border-radius: 0 2px 2px 0;
+            transition: background 0.2s;
+        }
+        .kpi-top:hover {
+            transform: translateY(-2px);
+            border-color: var(--line-strong);
+            box-shadow: 0 8px 24px -10px rgba(0,0,0,0.6);
+            background: var(--bg-elev);
+        }
+        .kpi-top.active-filter {
+            border-color: var(--acc-1);
+            background: rgba(81, 184, 234, 0.12);
+        }
+        .kpi-top.active-filter::before {
+            background: var(--acc-1) !important;
+        }
+
+        /* Variantes de cores para as bordas esquerdas dos KPIs do topo */
+        .kpi-total::before { background: var(--acc-1); }
+        .kpi-transporte::before { background: #6366f1; }
+        .kpi-instalacao::before { background: var(--warn); }
+        .kpi-agendada::before { background: #22d3ee; }
+        .kpi-aguardo::before { background: var(--bad); }
+        .kpi-concluida::before { background: var(--ok); }
+
+        .kpi-top-content { min-width: 0; }
+        .kpi-top-content .label {
+            font-size: 8px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--txt-mute);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .kpi-top-content .value {
+            font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 800; line-height: 1.1; margin-top: 3px;
+        }
+        .kpi-top-icon {
+            width: 34px; height: 34px; border-radius: 8px;
+            display: grid; place-items: center;
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--txt-mute);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .kpi-top:hover .kpi-top-icon {
+            color: var(--acc-1);
+            background: rgba(81,184,234,0.12);
+            border-color: rgba(81,184,234,0.25);
+        }
+
+        /* ============================================================= */
+        /* ============================================================= */
+        .grid {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: grid;
+            grid-template-columns: 1.92fr 0.75fr 0.75fr;
+            grid-template-rows: 6fr 4fr;
+            gap: 12px;
+        }
+        #panel-mapa         { grid-column: 1; grid-row: 1 / span 2; }
+        #panel-instalacoes  { grid-column: 2; grid-row: 1; }
+        #panel-transportes  { grid-column: 2; grid-row: 2; }
+        #panel-agendamentos { grid-column: 3; grid-row: 1; }
+        #panel-analise      { grid-column: 3; grid-row: 2; }
+
+        /* ============================================================= */
+        /* ============================================================= */
+        .panel {
+            position: relative;
+            display: flex; flex-direction: column;
+            min-height: 0; min-width: 0;
+            background: linear-gradient(180deg, var(--bg-panel) 0%, rgba(30, 42, 61, 0.95) 100%);
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 18px 40px -24px rgba(0,0,0,0.8);
+        }
+        .panel-head {
+            flex: 0 0 auto;
+            display: flex; align-items: center; gap: 11px;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--line);
+            background: rgba(0,0,0,0.2);
+        }
+        .panel-head .ic {
+            width: 28px; height: 28px; border-radius: 8px;
+            display: grid; place-items: center;
+            background: rgba(81,184,234,0.12);
+            color: var(--acc-1);
+            border: 1px solid rgba(81,184,234,0.25);
+        }
+        .panel-head .ic i { width: 14px; height: 14px; }
+        .panel-head .ttl { min-width: 0; }
+        .panel-head .ttl h2 {
+            margin: 0; font-size: 12px; font-weight: 800; letter-spacing: 0.12em;
+            text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .panel-head .ttl span {
+            font-size: 8px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase;
+            color: var(--txt-mute);
+        }
+        .panel-head .badge {
+            margin-left: auto; flex: 0 0 auto;
+            font-size: 9px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+            padding: 3px 9px; border-radius: 999px;
+            background: rgba(81,184,234,0.08); color: var(--acc-1);
+            border: 1px solid rgba(81,184,234,0.2);
+        }
+        .panel-body { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 12px 14px; }
+
+        /* Scrollbar discreta para listas internas */
+        .scroll { overflow-y: auto; height: 100%; padding-right: 4px; }
+        .scroll::-webkit-scrollbar { width: 5px; }
+        .scroll::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 10px; }
+        .scroll::-webkit-scrollbar-track { background: transparent; }
+
+        /* ============================================================= */
+        /* ============================================================= */
+        #panel-mapa .panel-body { padding: 0; position: relative; }
+        #map {
+            width: 100%; height: 100%; border: 0; display: block;
+            background: #1e2530;
+        }
+        /* Clareia as tiles escuras mantendo o registo dark (afeta só o basemap) */
+        #map .leaflet-tile-pane { filter: brightness(1.55) contrast(0.92); }
+
+        /* Slow glow pulsante nos marcadores — a cor do halo segue o fill do ponto */
+        @keyframes pinGlow {
+            0%, 100% { filter: drop-shadow(0 0 1px currentColor); }
+            50%      { filter: drop-shadow(0 0 5px currentColor) drop-shadow(0 0 9px currentColor); }
+        }
+        .glow-pin {
+            color: var(--acc-1);               /* fallback do halo */
+            animation: pinGlow 3.2s ease-in-out infinite;
+            transform-box: fill-box;
+            transform-origin: center;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .glow-pin { animation: none; }
+        }
+
+        /* Legenda de estados — overlay no canto inferior esquerdo do mapa */
+        .map-legend {
+            position: absolute; left: 12px; bottom: 12px; z-index: 500;
+            display: flex; flex-direction: column; gap: 6px;
+            padding: 10px 12px;
+            background: rgba(1, 4, 10, 0.72);
+            backdrop-filter: blur(6px);
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            font-family: 'Archivo', sans-serif; font-size: 11px; font-weight: 500;
+            color: var(--txt-faint);
+            pointer-events: none;
+        }
+        .map-legend .lg-item { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+        .map-legend .lg-dot {
+            width: 11px; height: 11px; border-radius: 50%;
+            border: 1px solid #01040a; flex-shrink: 0;
+        }
+
+        /* Leaflet Dark Custom Map style fixes */
+        .leaflet-container { background: #1e2530 !important; }
+
+        /* Slow glow — só marcadores que pedem ação (amarelo/vermelho) */
+        .glow-warn { animation: pulseWarn 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+        .glow-bad  { animation: pulseBad  2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+        @keyframes pulseWarn {
+            0%, 100% { filter: drop-shadow(0 0 1px rgba(251,191,36,0.5)); }
+            50%      { filter: drop-shadow(0 0 6px rgba(251,191,36,0.95)); }
+        }
+        @keyframes pulseBad {
+            0%, 100% { filter: drop-shadow(0 0 1px rgba(248,113,113,0.5)); }
+            50%      { filter: drop-shadow(0 0 7px rgba(248,113,113,0.95)); }
+        }
+        .leaflet-bar { border: 1px solid var(--line) !important; box-shadow: none !important; }
+        .leaflet-bar a {
+            background-color: #243553 !important;
+            color: var(--txt) !important;
+            border-bottom: 1px solid var(--line) !important;
+            transition: background 0.2s;
+        }
+        .leaflet-bar a:hover { background-color: var(--bg-elev) !important; color: var(--acc-1) !important; }
+        .leaflet-popup-content-wrapper {
+            background: rgba(14, 21, 38, 0.95) !important;
+            color: var(--txt) !important;
+            border: 1px solid var(--line-strong) !important;
+            border-radius: 12px !important;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8) !important;
+            backdrop-filter: blur(8px);
+        }
+        .leaflet-popup-tip { background: rgba(14, 21, 38, 0.95) !important; border: 1px solid var(--line-strong) !important; }
+
+        /* ----- EM INSTALAÇÃO — Cartões .mach ----- */
+        .mach { 
+            background: var(--bg-panel-2); 
+            border: 1px solid var(--line); 
+            border-radius: 11px; 
+            padding: 10px 12px; 
+            margin-bottom: 8px; 
+            cursor: pointer;
+            transition: all 0.2s ease-out;
+        }
+        .mach:hover {
+            border-color: var(--acc-1);
+            background: rgba(81,184,234,0.04);
+            transform: scale(1.01);
+        }
+        .mach.selected-highlight {
+            border-color: var(--acc-1);
+            background: rgba(81,184,234,0.08);
+            box-shadow: 0 0 12px rgba(81,184,234,0.25);
+        }
+        .mach-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+        .mach-top .name { font-size: 11.5px; font-weight: 800; letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff; }
+        .mach-top .model { font-size: 8.5px; font-weight: 700; color: var(--txt-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .posto { flex: 0 0 auto; font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 800; letter-spacing: 0.04em; padding: 2px 7px; border-radius: 5px; background: rgba(81,184,234,0.12); color: var(--acc-1); border: 1px solid rgba(81,184,234,0.22); }
+        .pct { margin-left: auto; flex: 0 0 auto; font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 800; color: var(--acc-1); }
+        
+        .bar { height: 6px; border-radius: 6px; background: rgba(0,0,0,0.35); overflow: hidden; }
+        .bar > i { display: block; height: 100%; border-radius: 6px; background: var(--acc-grad); transition: width 0.6s ease-out; }
+        
+        .phases { display: flex; gap: 4px; margin-top: 8px; }
+        .phase { flex: 1; text-align: center; }
+        .phase .seg { height: 4px; border-radius: 3px; background: rgba(0,0,0,0.3); margin-bottom: 4px; }
+        .phase.active .seg { background: var(--acc-1); }
+        .phase.done .seg { background: var(--ok); }
+        .phase .lbl { font-size: 6.5px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; color: var(--txt-mute); white-space: nowrap; }
+
+        /* ============================================================= */
+        /* ============================================================= */
+        .lot { 
+            display: flex; align-items: center; gap: 10px; 
+            background: var(--bg-panel-2); border: 1px solid var(--line); 
+            border-radius: 11px; padding: 8px 12px; margin-bottom: 8px; 
+            cursor: pointer;
+            transition: all 0.2s ease-out;
+        }
+        .lot:hover {
+            border-color: #6366f1;
+            background: rgba(99, 102, 241, 0.04);
+            transform: scale(1.01);
+        }
+        .lot.selected-highlight {
+            border-color: #6366f1;
+            background: rgba(99, 102, 241, 0.08);
+            box-shadow: 0 0 12px rgba(99, 102, 241, 0.25);
+        }
+        .lot .info { min-width: 0; width: 44%; }
+        .lot .info .l1 { font-size: 11px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff; }
+        .lot .info .l2 { font-size: 8px; font-weight: 700; color: var(--txt-mute); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+        .lot .info .l3 { font-size: 7.5px; font-weight: 700; color: var(--txt-faint); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        
+        .stepper { display: flex; align-items: center; gap: 0; flex: 1 1 auto; }
+        .step { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 0 0 auto; }
+        .step .node { width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center; border: 2px solid var(--idle); background: var(--bg-panel); }
+        .step .node i { width: 8px; height: 8px; color: #fff; opacity: 0; }
+        .step .lab { font-size: 6.5px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: var(--txt-mute); }
+        
+        .step.done .node { background: var(--ok); border-color: var(--ok); }
+        .step.done .node i { opacity: 1; }
+        .step.done .lab { color: var(--ok); }
+        
+        .step.active .node { border-color: #6366f1; background: rgba(99, 102, 241, 0.18); animation: pulse-indigo 1.6s infinite; }
+        .step.active .lab { color: #818cf8; }
+        @keyframes pulse-indigo { 0%,100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.5);} 60% { box-shadow:0 0 0 5px rgba(99, 102, 241, 0);} }
+        
+        .connector { flex: 1 1 auto; height: 2px; background: var(--idle); margin: 0 2px; margin-bottom: 12px; min-width: 12px; }
+        .connector.done { background: var(--ok); }
+
+        /* ============================================================= */
+        /* ============================================================= */
+        /* ============================================================= */
+        /* ============================================================= */
+        /* Agendas e Reservas — duas colunas por tag */
+        .agenda-split {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+            height: 100%; min-height: 0;
+        }
+        .agenda-col { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+        .agenda-col-head {
+            font-family: 'Archivo', sans-serif; font-size: 9.5px; font-weight: 800;
+            text-transform: uppercase; letter-spacing: 0.06em;
+            padding: 5px 8px; margin-bottom: 8px; border-radius: 7px;
+            text-align: center; flex: 0 0 auto;
+        }
+        .agenda-col-head.col-scheduled { background: rgba(34,211,238,0.1); color: #22d3ee; border: 1px solid rgba(34,211,238,0.25); }
+        .agenda-col-head.col-await     { background: rgba(248,113,113,0.12); color: var(--bad); border: 1px solid rgba(248,113,113,0.25); }
+        .agenda-col .scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+
+        /* Compactação dos cards dentro das 2 colunas estreitas de agenda */
+        .agenda-split .trow { gap: 7px; padding: 6px 8px; border-radius: 9px; margin-bottom: 6px; }
+        .agenda-split .trow .qty { width: 26px; height: 26px; border-radius: 6px; font-size: 9.5px; }
+        .agenda-split .trow .tinfo .tc { font-size: 10px; }
+        .agenda-split .trow .tinfo .tm { font-size: 8px; }
+        /* Badge de estado é redundante: já está no cabeçalho da coluna */
+        .agenda-split .trow .sup { display: none; }
+
+        .trow { 
+            display: flex; align-items: center; gap: 10px; 
+            background: var(--bg-panel-2); border: 1px solid var(--line); 
+            border-radius: 11px; padding: 8px 12px; margin-bottom: 8px; 
+            cursor: pointer;
+            transition: all 0.2s ease-out;
+        }
+        .trow:hover {
+            border-color: var(--acc-1);
+            background: rgba(255, 255, 255, 0.02);
+            transform: scale(1.01);
+        }
+        .trow.selected-highlight {
+            border-color: var(--acc-1);
+            background: rgba(255, 255, 255, 0.05);
+            box-shadow: 0 0 12px rgba(255,255,255,0.08);
+        }
+        .trow.await-info { border-left: 3px solid var(--bad); }
+        .trow.scheduled { border-left: 3px solid #22d3ee; }
+
+        .qty { 
+            flex: 0 0 auto; width: 34px; height: 34px; border-radius: 8px; 
+            background: var(--acc-grad); display: grid; place-items: center; 
+            font-family: 'JetBrains Mono', monospace; font-weight: 800; font-size: 11px; color: #fff; 
+        }
+        .qty.await-info-style { background: linear-gradient(135deg, var(--bad), #b91c1c); }
+        .qty.scheduled-style { background: linear-gradient(135deg, #22d3ee, #0891b2); }
+
+        .tinfo { min-width: 0; flex: 1 1 auto; }
+        .tinfo .tc { font-size: 11px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff; }
+        .tinfo .tm { font-size: 8.5px; font-weight: 700; color: var(--txt-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+        
+        .sup { flex: 0 0 auto; display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; max-width: 120px; }
+        .sup span { font-size: 7.5px; font-weight: 800; letter-spacing: 0.02em; padding: 2px 6px; border-radius: 5px; text-transform: uppercase; }
+        .sup span.badge-await { background: rgba(248,113,113,0.12); color: var(--bad); border: 1px solid rgba(248,113,113,0.25); }
+        .sup span.badge-scheduled { background: rgba(34,211,238,0.12); color: #22d3ee; border: 1px solid rgba(34,211,238,0.25); }
+
+        /* ============================================================= */
+        /* ============================================================= */
+        .cont-wrap { display: flex; gap: 14px; height: 100%; align-items: center; justify-content: space-between; }
+        .cont-left { flex: 0 0 110px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        
+        /* Circular SVG Gauge */
+        .gaugebox { position: relative; width: 110px; height: 110px; }
+        .gaugebox svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+        .gaugebox .circle-bg { fill: none; stroke: rgba(255, 255, 255, 0.04); stroke-width: 8; }
+        .gaugebox .circle-bar { fill: none; stroke: url(#gauge-grad); stroke-width: 8; stroke-linecap: round; stroke-dasharray: 251.2; stroke-dashoffset: 251.2; transition: stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1); }
+        
+        .gaugebox .center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .gaugebox .center .g-v { font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 800; line-height: 1; color: #fff; }
+        .gaugebox .center .g-l { font-size: 7px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: var(--txt-mute); margin-top: 3px; }
+        
+        .cont-mid { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+        .cont-right { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 8px; border-left: 1px solid var(--line); padding-left: 14px; }
+
+        /* Realce do ano atual na lista "Concluídas por Ano" */
+        .year-row.year-current {
+            background: rgba(81, 184, 234, 0.08);
+            border: 1px solid rgba(81, 184, 234, 0.25);
+            border-radius: 7px;
+            padding: 5px 7px;
+            margin-bottom: 3px;
+        }
+        
+        .cat { }
+        .cat .crow { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
+        .cat .cname { font-size: 8.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--txt-mute); }
+        .cat .cval { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; font-weight: 700; color: #fff; }
+        .cat .cbar { height: 5px; border-radius: 6px; background: rgba(0,0,0,0.3); overflow: hidden; }
+        .cat .cbar > i { display: block; height: 100%; border-radius: 6px; transition: width 0.8s ease-out; }
+
+        .drawer-toggle {
+            background: rgba(81,184,234,0.12);
+            border: 1px solid rgba(81,184,234,0.25);
+            color: var(--acc-1);
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            padding: 6px 14px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .drawer-toggle:hover {
+            background: var(--acc-grad);
+            color: #fff;
+            border-color: transparent;
+            box-shadow: 0 4px 12px rgba(81,184,234,0.25);
+        }
+
+        .drawer-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(6px);
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .drawer-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .drawer-content {
+            position: fixed;
+            top: 0; right: 0; bottom: 0;
+            width: 85%;
+            max-width: 950px;
+            background: #0d1627;
+            border-left: 1px solid var(--line-strong);
+            z-index: 101;
+            transform: translateX(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            box-shadow: -10px 0 35px rgba(0,0,0,0.6);
+        }
+        .drawer-overlay.open .drawer-content {
+            transform: translateX(0);
+        }
+
+        /* ============================================================= */
+        /* ============================================================= */
+        @media (max-width: 1250px) {
+            html, body { overflow: auto; }
+            .app { height: auto; min-height: 100vh; overflow: visible; }
+            .grid { grid-template-columns: 1fr; grid-template-rows: none; height: auto; flex: none; }
+            #panel-mapa, #panel-instalacoes, #panel-transportes, #panel-agendamentos, #panel-analise {
+                grid-column: auto; grid-row: auto;
+            }
+            #panel-mapa { min-height: 450px; height: 450px; }
+            .panel { min-height: 280px; height: 340px; }
+            .kpis-top-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+        @media (max-width: 640px) {
+            .kpis-top-grid { grid-template-columns: repeat(2, 1fr); }
+            .topbar { flex-direction: column; text-align: center; }
+            .brand { flex-direction: column; }
+            .brand-info { border-left: none; padding-left: 0; margin-top: 6px; }
+            .topbar-right { flex-direction: column; width: 100%; gap: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app">
+        <header class="topbar">
+            <div class="brand">
+                <img src="https://res.cloudinary.com/djxxk3ipz/image/upload/v1776687956/somengil_logo_white_wzwrm0.png" 
+                     alt="Somengil Logo" 
+                     class="brand-logo"
+                     onerror="this.onerror=null; this.src='https://placehold.co/150x38/1B4794/ffffff?text=SOMENGIL'">
+                <div class="brand-info">
+                    <h1>Planeamento & Instalações</h1>
+                    <p>Live Monitoring Operations Panel</p>
+                </div>
+            </div>
+
+            <div class="topbar-right">
+                <div class="live">
+                    <span class="dot" id="sync-dot"></span>
+                    <span id="sync-text">Live Syncing</span>
+                </div>
+
+                <select id="select-country" onchange="applyGlobalFilters()" class="header-filter">
+                    <option value="">Todos os Países</option>
+                </select>
+
+                <button class="drawer-toggle" onclick="toggleDrawer(true)">
+                    <i data-lucide="table-2" style="width: 14px; height:14px;"></i>
+                    <span>Tabela de Dados</span>
+                </button>
+
+                <div class="clock">
+                    <div class="t" id="clock-time">08:00:00</div>
+                    <div class="d" id="clock-date">JUL 16, 2026</div>
+                </div>
+            </div>
+        </header>
+
+        <div class="kpis-top-grid">
+            <div class="kpi-top kpi-total active-filter" id="kpi-all" onclick="filterByStatusCard('all')">
+                <div class="kpi-top-content">
+                    <div class="label">Instalações Globais</div>
+                    <div class="value" id="kpi-val-all">-</div>
+                </div>
+                <div class="kpi-top-icon">
+                    <i data-lucide="milestone" class="w-4 h-4"></i>
+                </div>
+            </div>
+
+            <div class="kpi-top kpi-transporte" id="kpi-transporte" onclick="filterByStatusCard('Em Transporte')">
+                <div class="kpi-top-content">
+                    <div class="label">Em Transporte</div>
+                    <div class="value" id="kpi-val-transporte">-</div>
+                </div>
+                <div class="kpi-top-icon">
+                    <i data-lucide="truck" class="w-4 h-4"></i>
+                </div>
+            </div>
+
+            <div class="kpi-top kpi-instalacao" id="kpi-instalacao" onclick="filterByStatusCard('EM INSTALAÇÃO')">
+                <div class="kpi-top-content">
+                    <div class="label">Em Instalação</div>
+                    <div class="value" id="kpi-val-instalacao">-</div>
+                </div>
+                <div class="kpi-top-icon">
+                    <i data-lucide="wrench" class="w-4 h-4"></i>
+                </div>
+            </div>
+
+            <div class="kpi-top kpi-agendada" id="kpi-agendada" onclick="filterByStatusCard('INSTALAÇÃO AGENDADA')">
+                <div class="kpi-top-content">
+                    <div class="label">Instalação Agendada</div>
+                    <div class="value" id="kpi-val-agendada">-</div>
+                </div>
+                <div class="kpi-top-icon">
+                    <i data-lucide="calendar" class="w-4 h-4"></i>
+                </div>
+            </div>
+
+            <div class="kpi-top kpi-aguardo" id="kpi-aguardo" onclick="filterByStatusCard('Aguardo Info Cliente')">
+                <div class="kpi-top-content">
+                    <div class="label">Aguardo Info Cliente</div>
+                    <div class="value" id="kpi-val-aguardo">-</div>
+                </div>
+                <div class="kpi-top-icon">
+                    <i data-lucide="hourglass" class="w-4 h-4"></i>
+                </div>
+            </div>
+
+            <div class="kpi-top kpi-concluida" id="kpi-concluida" onclick="filterByStatusCard('Concluída Instalação')">
+                <div class="kpi-top-content">
+                    <div class="label">Concluídas</div>
+                    <div class="value" id="kpi-val-concluida">-</div>
+                </div>
+                <div class="kpi-top-icon">
+                    <i data-lucide="check-circle" class="w-4 h-4"></i>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="panel" id="panel-mapa">
+                <div class="panel-head">
+                    <div class="ic"><i data-lucide="globe"></i></div>
+                    <div class="ttl">
+                        <h2>Mapeamento Geográfico</h2>
+                        <span>Rastreamento global em tempo real</span>
+                    </div>
+                    <div class="badge" id="map-counter-badge">A carregar...</div>
+                </div>
+                <div class="panel-body">
+                    <div id="map"></div>
+                    <div class="map-legend" aria-label="Legenda de estados">
+                        <span class="lg-item"><i class="lg-dot" style="background:var(--ok)"></i>Concluída</span>
+                        <span class="lg-item"><i class="lg-dot" style="background:var(--warn)"></i>Em Instalação</span>
+                        <span class="lg-item"><i class="lg-dot" style="background:#22d3ee"></i>Agendada</span>
+                        <span class="lg-item"><i class="lg-dot" style="background:var(--bad)"></i>Aguardar Info</span>
+                        <span class="lg-item"><i class="lg-dot" style="background:var(--idle)"></i>Sem estado</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel" id="panel-instalacoes">
+                <div class="panel-head">
+                    <div class="ic"><i data-lucide="activity"></i></div>
+                    <div class="ttl">
+                        <h2>Em Instalação</h2>
+                        <span>Processamento técnico ativo</span>
+                    </div>
+                    <div class="badge" id="badge-count-instalacoes" style="background: rgba(251,191,36,0.1); color: var(--warn); border-color: rgba(251,191,36,0.25);">0</div>
+                </div>
+                <div class="panel-body">
+                    <div class="scroll" id="container-instalacoes"></div>
+                </div>
+            </div>
+
+            <div class="panel" id="panel-transportes">
+                <div class="panel-head">
+                    <div class="ic"><i data-lucide="navigation" style="color: #818cf8;"></i></div>
+                    <div class="ttl">
+                        <h2>Em Transporte</h2>
+                        <span>Trânsito de equipamentos</span>
+                    </div>
+                    <div class="badge" id="badge-count-transportes" style="background: rgba(99,102,241,0.1); color: #818cf8; border-color: rgba(99,102,241,0.25);">0</div>
+                </div>
+                <div class="panel-body">
+                    <div class="scroll" id="container-transportes"></div>
+                </div>
+            </div>
+
+            <div class="panel" id="panel-agendamentos">
+                <div class="panel-head">
+                    <div class="ic"><i data-lucide="clock" style="color: #22d3ee;"></i></div>
+                    <div class="ttl">
+                        <h2>Gestão e Planeamento</h2>
+                        <span>Próximas intervenções agendadas</span>
+                    </div>
+                    <div class="badge" id="badge-count-agendamentos" style="background: rgba(34,211,238,0.1); color: #22d3ee; border-color: rgba(34,211,238,0.25);">0</div>
+                </div>
+                <div class="panel-body">
+                    <div class="agenda-split">
+                        <div class="agenda-col">
+                            <div class="agenda-col-head col-scheduled">Instalação Agendada</div>
+                            <div class="scroll" id="container-agendadas"></div>
+                        </div>
+                        <div class="agenda-col">
+                            <div class="agenda-col-head col-await">Aguardo Info Cliente</div>
+                            <div class="scroll" id="container-aguardo"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel" id="panel-analise">
+                <div class="panel-head">
+                    <div class="ic"><i data-lucide="trending-up"></i></div>
+                    <div class="ttl">
+                        <h2>Performance Global</h2>
+                        <span>Análise operacional resumida</span>
+                    </div>
+                    <div class="badge">Estatísticas</div>
+                </div>
+                <div class="panel-body">
+                    <div class="cont-wrap">
+                        <div class="cont-left">
+                            <div class="gaugebox">
+                                <svg viewBox="0 0 100 100">
+                                    <defs>
+                                        <linearGradient id="gauge-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                            <stop offset="0%" stop-color="#51B8EA" />
+                                            <stop offset="100%" stop-color="#1B4794" />
+                                        </linearGradient>
+                                    </defs>
+                                    <circle class="circle-bg" cx="50" cy="50" r="40" />
+                                    <circle class="circle-bar" id="gauge-circle-progress" cx="50" cy="50" r="40" />
+                                </svg>
+                                <div class="center">
+                                    <div class="g-v" id="gauge-value">0%</div>
+                                    <div class="g-l">Progresso</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="cont-mid" id="performance-categories-list"></div>
+
+                        <div class="cont-right">
+                            <div class="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 border-b border-slate-700/50 pb-0.5">
+                                Concluídas por Ano
+                            </div>
+                            <div class="scroll flex flex-col gap-1.5" id="concluded-years-list" style="max-height: 85px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Slide-out Table Drawer Overlay -->
+    <div class="drawer-overlay" id="drawer-overlay" onclick="toggleDrawer(false)">
+        <div class="drawer-content" onclick="event.stopPropagation()">
+            <div class="p-4 border-b border-[rgba(140,165,210,0.18)] flex items-center justify-between bg-[#0e172a]">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="table-2" class="text-somengil-blue w-5 h-5 text-[#51B8EA]"></i>
+                    <div>
+                        <h3 class="font-bold text-sm tracking-wider uppercase text-white">Lista Detalhada de Planeamento</h3>
+                        <p class="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">Visão analítica integrada dos dados Appsheet</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button onclick="exportToCSV()" class="bg-[#18233b] hover:bg-[#243553] text-[10px] font-bold text-white px-3 py-1.5 rounded-lg border border-[rgba(140,165,210,0.2)] flex items-center gap-1.5 transition-all">
+                        <i data-lucide="download" class="w-3.5 h-3.5 text-[#51B8EA]"></i> Exportar CSV
+                    </button>
+                    <button onclick="toggleDrawer(false)" class="text-slate-400 hover:text-white bg-slate-800/50 p-1.5 rounded-lg border border-slate-700">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-auto p-4">
+                <table class="w-full text-left border-collapse text-xs text-slate-300">
+                    <thead>
+                        <tr class="border-b border-[rgba(140,165,210,0.2)] text-[10px] uppercase tracking-wider text-slate-400 bg-slate-900/40">
+                            <th class="py-3 px-3">Lote</th>
+                            <th class="py-3 px-3">Cliente</th>
+                            <th class="py-3 px-3">País</th>
+                            <th class="py-3 px-3">STATUS 2 (Estado)</th>
+                            <th class="py-3 px-3">Técnico Responsável</th>
+                            <th class="py-3 px-3">Progresso (%)</th>
+                            <th class="py-3 px-3">Série</th>
+                            <th class="py-3 px-3">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="drawer-table-body" class="divide-y divide-slate-800/40"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuração de Duplo Canal: Conecta diretamente à API do Web App do utilizador caso corra fora do Sheets
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbx6cu2yF5XjzRBgowff1VbNXpDlVb6ZuXOmHAYwPXRni34f25lxBeuEXPZ7p7h0mjBq/exec";
+
+        let rawData = [];
+        let filteredData = [];
+        let currentStatusFilter = "all";
+        let currentCountryFilter = "";
+        
+        let map = null;
+        let markersGroup = null;
+        let activeMarkersMap = {};
+        let activeHighlightId = null;
+
+        // Base de dados local de emergência para manter a página online caso a rede falhe
+        const fallbackData = [
+            { lote: "L-2026-001", status: "Ativo", satevo: "EV-33", numeroInstalacao: "INS-908", tecnico: "Carlos Fonseca", lat: 40.6401, long: -8.6536, status2: "Em Transporte", percent: 45, serie: "S-100", pais: "Portugal", cliente: "Supermercados Continente Aveiro" },
+            { lote: "L-2026-002", status: "Ativo", satevo: "EV-41", numeroInstalacao: "INS-909", tecnico: "Rui Silva", lat: 38.7223, long: -9.1393, status2: "EM INSTALAÇÃO", percent: 80, serie: "S-200", pais: "Portugal", cliente: "Lidl Carnaxide" },
+            { lote: "L-2025-003", status: "Ativo", satevo: "EV-12", numeroInstalacao: "INS-910", tecnico: "Jean Dupont", lat: 48.8566, long: 2.3522, status2: "Concluída Instalação", percent: 100, serie: "S-100", pais: "França", cliente: "Auchan Paris" },
+            { lote: "L-2026-004", status: "Ativo", satevo: "EV-55", numeroInstalacao: "INS-911", tecnico: "Carlos Fonseca", lat: 40.4168, long: -3.7038, status2: "INSTALAÇÃO AGENDADA", percent: 15, serie: "S-400", pais: "Espanha", cliente: "Mercadona Madrid Central" },
+            { lote: "L-2025-005", status: "Pendente", satevo: "EV-19", numeroInstalacao: "INS-912", tecnico: "Hans Müller", lat: 52.5200, long: 13.4050, status2: "Aguardo Info Cliente", percent: 5, serie: "S-300", pais: "Alemanha", cliente: "Edeka Berlin" }
+        ];
+
+        window.onload = function() {
+            lucide.createIcons();
+            startClock();
+            initMap();
+            loadSheetData();
+        };
+
+        function startClock() {
+            function update() {
+                const now = new Date();
+                const hh = String(now.getHours()).padStart(2, '0');
+                const mm = String(now.getMinutes()).padStart(2, '0');
+                const ss = String(now.getSeconds()).padStart(2, '0');
+                document.getElementById('clock-time').textContent = `${hh}:${mm}:${ss}`;
+
+                const months = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
+                const day = now.getDate();
+                const m = months[now.getMonth()];
+                const y = now.getFullYear();
+                document.getElementById('clock-date').textContent = `${m} ${day}, ${y}`;
+            }
+            update();
+            setInterval(update, 1000);
+        }
+
+        function extractYear(loteStr) {
+            if (!loteStr) return 'S/ Ano';
+            const match = loteStr.match(/(?:20|21)\d{2}/);
+            return match ? match[0] : 'S/ Ano';
+        }
+
+        function initMap() {
+            map = L.map('map', {
+                center: [41.15, -8.62],
+                zoom: 4,
+                zoomControl: true,
+                scrollWheelZoom: true
+            });
+
+            // CartoDB Premium Darkmatter basemap
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 19
+            }).addTo(map);
+
+            markersGroup = L.layerGroup().addTo(map);
+        }
+
+        function loadSheetData() {
+            setSyncStatus('A ligar...', 'warn');
+            
+            // Caso 1: A correr dentro do Google Sheets (Nativo)
+            if (typeof google !== 'undefined' && google.script && google.script.run) {
+                google.script.run
+                    .withSuccessHandler(function(response) {
+                        if (response && response.error) {
+                            console.error("Erro no Apps Script:", response.error);
+                            loadFallbackData();
+                        } else if (response && response.length > 0) {
+                            processImportedData(response);
+                            setSyncStatus('Conectado Live', 'ok');
+                        } else {
+                            loadFallbackData();
+                        }
+                    })
+                    .withFailureHandler(function(err) {
+                        console.error("Falha na chamada do Apps Script:", err);
+                        loadFallbackData();
+                    })
+                    .getSheetsData();
+            } else {
+                // Caso 2: A correr no preview ou localmente (Faz fetch assíncrono ao Web App)
+                console.log("Fora do Sheets. A utilizar API externa do Web App...");
+                
+                fetch(`${WEB_APP_URL}?action=get&t=${Date.now()}`)
+                    .then(response => {
+                        if (!response.ok) throw new Error("Erro na resposta do servidor");
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data && data.length > 0) {
+                            processImportedData(data);
+                            setSyncStatus('API Live', 'ok');
+                        } else {
+                            loadFallbackData();
+                        }
+                    })
+                    .catch(err => {
+                        console.warn("Ligação à API falhou. A carregar dados de segurança locais:", err);
+                        loadFallbackData();
+                    });
+            }
+        }
+
+        function loadFallbackData() {
+            processImportedData(fallbackData);
+            setSyncStatus('Modo Offline', 'bad');
+        }
+
+        function setSyncStatus(text, state) {
+            const dot = document.getElementById('sync-dot');
+            const txt = document.getElementById('sync-text');
+            txt.textContent = text;
+            
+            dot.className = "dot";
+            if (state === 'ok') {
+                dot.style.background = "var(--ok)";
+                txt.style.color = "var(--ok)";
+            } else if (state === 'warn') {
+                dot.style.background = "var(--warn)";
+                txt.style.color = "var(--warn)";
+            } else {
+                dot.style.background = "var(--bad)";
+                txt.style.color = "var(--bad)";
+            }
+        }
+
+        function processImportedData(data) {
+            rawData = data.map((item, idx) => {
+                return {
+                    id: 'inst-' + idx,
+                    lote: item.lote,
+                    status: item.status,
+                    satevo: item.satevo,
+                    numeroInstalacao: item.numeroInstalacao,
+                    tecnico: item.tecnico,
+                    lat: item.lat,
+                    long: item.long,
+                    status2: item.status2,
+                    percent: item.percent,
+                    serie: item.serie,
+                    pais: item.pais,
+                    cliente: item.cliente,
+                    anoConclusao: item.anoConclusao,
+                    anoEnc: item.anoEnc
+                };
+            });
+
+            buildCountryFilter();
+            calculateAllKPIs();
+            applyGlobalFilters();
+        }
+
+        function buildCountryFilter() {
+            const dropdown = document.getElementById('select-country');
+            const countries = [...new Set(rawData.map(item => item.pais))].filter(Boolean).sort();
+            dropdown.innerHTML = '<option value="">Todos os Países</option>';
+            countries.forEach(country => {
+                const opt = document.createElement('option');
+                opt.value = country;
+                opt.textContent = country;
+                dropdown.appendChild(opt);
+            });
+        }
+
+        function calculateAllKPIs() {
+            const counts = { all: 0, transporte: 0, instalacao: 0, agendada: 0, aguardo: 0, concluida: 0 };
+            counts.all = rawData.length;
+
+            rawData.forEach(item => {
+                const s = item.status2.toUpperCase();
+                if (s.includes('TRANSPORTE') || s.includes('TRASNPORTE')) counts.transporte++;
+                else if (s.includes('INSTALAÇÃO') && s.includes('EM')) counts.instalacao++;
+                else if (s.includes('AGENDADA')) counts.agendada++;
+                else if (s.includes('AGUARDO')) counts.aguardo++;
+                else if (s.includes('CONCLUÍDA') || s.includes('CONCLUIDA')) counts.concluida++;
+            });
+
+            document.getElementById('kpi-val-all').textContent = counts.all;
+            document.getElementById('kpi-val-transporte').textContent = counts.transporte;
+            document.getElementById('kpi-val-instalacao').textContent = counts.instalacao;
+            document.getElementById('kpi-val-agendada').textContent = counts.agendada;
+            document.getElementById('kpi-val-aguardo').textContent = counts.aguardo;
+            document.getElementById('kpi-val-concluida').textContent = counts.concluida;
+        }
+
+        function filterByStatusCard(statusType) {
+            const cards = document.querySelectorAll('.kpi-top');
+            cards.forEach(c => c.classList.remove('active-filter'));
+
+            currentStatusFilter = statusType;
+
+            let idString = "kpi-all";
+            if (statusType === 'Em Transporte') idString = "kpi-transporte";
+            else if (statusType === 'EM INSTALAÇÃO') idString = "kpi-instalacao";
+            else if (statusType === 'INSTALAÇÃO AGENDADA') idString = "kpi-agendada";
+            else if (statusType === 'Aguardo Info Cliente') idString = "kpi-aguardo";
+            else if (statusType === 'Concluída Instalação') idString = "kpi-concluida";
+
+            document.getElementById(idString).classList.add('active-filter');
+            applyGlobalFilters();
+        }
+
+        function applyGlobalFilters() {
+            currentCountryFilter = document.getElementById('select-country').value;
+
+            filteredData = rawData.filter(item => {
+                const matchesCountry = !currentCountryFilter || item.pais === currentCountryFilter;
+                if (currentStatusFilter === 'all') return matchesCountry;
+                
+                const s = item.status2.toUpperCase();
+                const sf = currentStatusFilter.toUpperCase();
+
+                if (sf === 'EM TRANSPORTE') {
+                    return matchesCountry && (s.includes('TRANSPORTE') || s.includes('TRASNPORTE'));
+                }
+                return matchesCountry && s.includes(sf);
+            });
+
+            renderPinsOnMap();
+            populateGridPanels();
+            updateAnalyticalGauge();
+            populateDrawerTable();
+        }
+
+        function getStatusColor(statusStr) {
+            const s = (statusStr || '').toUpperCase();
+            if (s.includes('CONCLUÍDA') || s.includes('CONCLUIDA')) return 'var(--ok)';
+            if (s.includes('AGUARDO')) return 'var(--bad)';
+            if (s.includes('AGENDADA')) return '#22d3ee';
+            if (s.includes('INSTALAÇÃO') && s.includes('EM')) return 'var(--warn)';
+            if (s.includes('TRANSPORTE') || s.includes('TRASNPORTE')) return '#6366f1';
+            return 'var(--idle)';
+        }
+
+        function renderPinsOnMap() {
+            markersGroup.clearLayers();
+            activeMarkersMap = {};
+            const bounds = [];
+
+            filteredData.forEach(item => {
+                if (item.lat && item.long && !isNaN(item.lat) && !isNaN(item.long)) {
+                    const color = getStatusColor(item.status2);
+                    // Não desenhar "Sem estado" (idle) — só cria ruído no mapa
+                    if (color === 'var(--idle)') return;
+                    // Glow pulsante só para os que pedem ação: Aguardo Info (vermelho) e Em Instalação (amarelo)
+                    const s = (item.status2 || '').toUpperCase();
+                    let glowClass = 'glow-pin';
+                    if (s.includes('AGUARDO')) glowClass += ' glow-bad';
+                    else if (s.includes('INSTALAÇÃO') && s.includes('EM')) glowClass += ' glow-warn';
+
+                    const marker = L.circleMarker([item.lat, item.long], {
+                        radius: 8,
+                        fillColor: color,
+                        color: '#01040a',
+                        weight: 1,
+                        opacity: 1,
+                        fillOpacity: 0.95,
+                        className: glowClass
+                    });
+
+                    const tooltipHTML = `
+                        <div class="p-1 font-sans text-xs" style="min-width: 180px;">
+                            <div class="flex items-center gap-1.5 mb-1.5">
+                                <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${color}"></span>
+                                <span style="font-size: 8px; font-weight:800; letter-spacing:0.04em; text-transform:uppercase; color:var(--txt-mute);">${item.status2}</span>
+                            </div>
+                            <h4 style="font-weight: 800; color:#fff; line-height:1.2; margin-bottom:4px; font-size:11px;">${item.cliente}</h4>
+                            <div style="border-top:1px solid var(--line); padding-top:4px; font-size:9.5px; color:var(--txt-faint);" class="grid grid-cols-2 gap-1">
+                                <div><b>Lote:</b> ${item.lote}</div>
+                                <div><b>Téc:</b> ${item.tecnico}</div>
+                                <div class="col-span-2"><b>Progresso:</b> ${item.percent}%</div>
+                            </div>
+                        </div>
+                    `;
+
+                    marker.bindPopup(tooltipHTML, { closeButton: false, offset: L.point(0, -2) });
+                    marker.on('click', () => highlightSelectedCard(item.id, true));
+
+                    marker.addTo(markersGroup);
+                    activeMarkersMap[item.id] = marker;
+                    bounds.push([item.lat, item.long]);
+                }
+            });
+
+            if (bounds.length > 0 && map) {
+                map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
+            }
+
+            // Contador reflete só os marcadores efetivamente desenhados (exclui "Sem estado")
+            document.getElementById('map-counter-badge').textContent = `${bounds.length} Marcadores`;
+        }
+
+        function populateGridPanels() {
+            const instContainer = document.getElementById('container-instalacoes');
+            const transContainer = document.getElementById('container-transportes');
+            const agendadasContainer = document.getElementById('container-agendadas');
+            const aguardoContainer = document.getElementById('container-aguardo');
+
+            instContainer.innerHTML = '';
+            transContainer.innerHTML = '';
+            agendadasContainer.innerHTML = '';
+            aguardoContainer.innerHTML = '';
+
+            let instCount = 0;
+            let transCount = 0;
+            let agendadasCount = 0;
+            let aguardoCount = 0;
+
+            rawData.forEach(item => {
+                if (currentCountryFilter && item.pais !== currentCountryFilter) return;
+
+                const s = item.status2.toUpperCase();
+
+                // 1. EM INSTALAÇÃO (Mostrando explicitamente o Técnico Responsável)
+                if (s.includes('INSTALAÇÃO') && s.includes('EM')) {
+                    instCount++;
+                    
+                    const isPrep = item.percent < 40;
+                    const isMont = item.percent >= 40 && item.percent < 85;
+                    const isTest = item.percent >= 85;
+
+                    instContainer.innerHTML += `
+                        <div class="mach" id="card-${item.id}" onclick="focusOnMarker('${item.id}', ${item.lat}, ${item.long})">
+                            <div class="mach-top">
+                                <div class="posto">#${item.numeroInstalacao}</div>
+                                <div class="name" title="${item.cliente}">${item.cliente}</div>
+                                <div class="pct">${item.percent}%</div>
+                            </div>
+                            <div class="flex justify-between items-center text-[8.5px] font-bold text-slate-400 mb-2 uppercase tracking-wide">
+                                <span>${item.pais}</span>
+                                <span class="text-[var(--acc-1)]">Téc: ${item.tecnico}</span>
+                            </div>
+                            <div class="bar">
+                                <i style="width: ${item.percent}%;"></i>
+                            </div>
+                            <div class="phases">
+                                <div class="phase ${isPrep ? 'active' : 'done'}"><div class="seg"></div><div class="lbl">Prep</div></div>
+                                <div class="phase ${isMont ? 'active' : (isMont || isTest ? 'done' : '')}"><div class="seg"></div><div class="lbl">Mont</div></div>
+                                <div class="phase ${isTest ? 'active' : (isTest ? 'done' : '')}"><div class="seg"></div><div class="lbl">Teste</div></div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // 2. EM TRANSPORTE (Stepper de 3 fases)
+                else if (s.includes('TRANSPORTE') || s.includes('TRASNPORTE')) {
+                    transCount++;
+
+                    const step1 = item.percent >= 10;
+                    const step2 = item.percent >= 50;
+                    const step3 = item.percent >= 90;
+
+                    transContainer.innerHTML += `
+                        <div class="lot" id="card-${item.id}" onclick="focusOnMarker('${item.id}', ${item.lat}, ${item.long})">
+                            <div class="info">
+                                <div class="l1" title="${item.cliente}">${item.cliente}</div>
+                                <div class="l2">${item.lote} • ${item.serie}</div>
+                                <div class="l3">${item.tecnico}</div>
+                            </div>
+                            <div class="stepper">
+                                <div class="step ${step1 ? 'done' : 'active'}">
+                                    <div class="node"><i data-lucide="check" class="w-2 h-2"></i></div>
+                                    <div class="lab">Exp</div>
+                                </div>
+                                <div class="connector ${step2 ? 'done' : ''}"></div>
+                                <div class="step ${step2 ? 'done' : (step1 ? 'active' : '')}">
+                                    <div class="node"><i data-lucide="check" class="w-2 h-2"></i></div>
+                                    <div class="lab">Trn</div>
+                                </div>
+                                <div class="connector ${step3 ? 'done' : ''}"></div>
+                                <div class="step ${step3 ? 'done' : (step2 ? 'active' : '')}">
+                                    <div class="node"><i data-lucide="check" class="w-2 h-2"></i></div>
+                                    <div class="lab">Ent</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // 3. AGENDADO / PENDENTE (Aguardo Info)
+                else if (s.includes('AGENDADA') || s.includes('AGUARDO')) {
+                    const isAwait = s.includes('AGUARDO');
+
+                    // "Aguardo Info" só mostra registos com data de encomenda (ENC) do ano vigente
+                    if (isAwait) {
+                        const anoAtual = new Date().getFullYear().toString();
+                        if (!item.anoEnc || item.anoEnc.trim() !== anoAtual) return;
+                    }
+
+                    if (isAwait) aguardoCount++; else agendadasCount++;
+
+                    const cardHtml = `
+                        <div class="trow ${isAwait ? 'await-info' : 'scheduled'}" id="card-${item.id}" onclick="focusOnMarker('${item.id}', ${item.lat}, ${item.long})">
+                            <div class="qty ${isAwait ? 'await-info-style' : 'scheduled-style'}">
+                                ${item.pais.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div class="tinfo">
+                                <div class="tc" title="${item.cliente}">${item.cliente}</div>
+                                <div class="tm">${item.tecnico} • Lote ${item.lote}</div>
+                            </div>
+                            <div class="sup">
+                                <span class="${isAwait ? 'badge-await' : 'badge-scheduled'}">${item.status2}</span>
+                            </div>
+                        </div>
+                    `;
+
+                    if (isAwait) aguardoContainer.innerHTML += cardHtml;
+                    else agendadasContainer.innerHTML += cardHtml;
+                }
+            });
+
+            // Sincronização dos badges
+            document.getElementById('badge-count-instalacoes').textContent = instCount;
+            document.getElementById('badge-count-transportes').textContent = transCount;
+            document.getElementById('badge-count-agendamentos').textContent = agendadasCount + aguardoCount;
+
+            if (instCount === 0) instContainer.innerHTML = '<div class="text-[11px] text-slate-500 py-6 text-center">Sem instalações ativas</div>';
+            if (transCount === 0) transContainer.innerHTML = '<div class="text-[11px] text-slate-500 py-6 text-center">Nenhum envio ativo</div>';
+            if (agendadasCount === 0) agendadasContainer.innerHTML = '<div class="text-[10px] text-slate-500 py-5 text-center">Nenhuma agendada</div>';
+            if (aguardoCount === 0) aguardoContainer.innerHTML = '<div class="text-[10px] text-slate-500 py-5 text-center">Sem pendências</div>';
+
+            lucide.createIcons();
+        }
+
+        function updateAnalyticalGauge() {
+            const dataset = filteredData.length > 0 ? filteredData : rawData;
+            const currentYear = new Date().getFullYear().toString();
+
+            // Helpers de classificação de estado
+            const isConcluida = (s) => s.includes('CONCLUÍDA') || s.includes('CONCLUIDA');
+            const isEmInstalacao = (s) => s.includes('INSTALAÇÃO') && s.includes('EM');
+            const isAguardo = (s) => s.includes('AGUARDO');
+
+            // Universo "ano vigente": concluídas DESTE ano + ativas Em Instalação e Aguardo Info.
+            // (As ativas não têm anoConclusao, mas representam trabalho a decorrer agora.)
+            const anoVigente = dataset.filter(item => {
+                const s = item.status2.toUpperCase();
+                if (isConcluida(s)) {
+                    const yr = (item.anoConclusao && item.anoConclusao.trim())
+                        ? item.anoConclusao.trim() : extractYear(item.lote);
+                    return yr === currentYear;
+                }
+                return isEmInstalacao(s) || isAguardo(s);
+            });
+
+            // Gauge: % média apenas do universo do ano vigente
+            const totalSum = anoVigente.reduce((sum, item) => sum + item.percent, 0);
+            const avgProgress = anoVigente.length > 0 ? Math.round(totalSum / anoVigente.length) : 0;
+
+            const circle = document.getElementById('gauge-circle-progress');
+            const circumference = 2 * Math.PI * 40; // 251.2
+            const offset = circumference - (avgProgress / 100) * circumference;
+            circle.style.strokeDashoffset = offset;
+
+            document.getElementById('gauge-value').textContent = avgProgress + '%';
+
+            // Categorias — contadas apenas dentro do universo do ano vigente
+            const counts = { concluida: 0, instalacao: 0, aguardo: 0 };
+            anoVigente.forEach(item => {
+                const s = item.status2.toUpperCase();
+                if (isConcluida(s)) counts.concluida++;
+                else if (isEmInstalacao(s)) counts.instalacao++;
+                else if (isAguardo(s)) counts.aguardo++;
+            });
+
+            const catList = document.getElementById('performance-categories-list');
+            const items = [
+                { name: 'Instaladas ' + currentYear, count: counts.concluida, color: 'var(--ok)' },
+                { name: 'Em Instalação', count: counts.instalacao, color: 'var(--warn)' },
+                { name: 'Aguardar Info', count: counts.aguardo, color: 'var(--bad)' }
+            ];
+
+            catList.innerHTML = items.map(cat => {
+                const pct = anoVigente.length > 0 ? Math.round((cat.count / anoVigente.length) * 100) : 0;
+                return `
+                    <div class="cat">
+                        <div class="crow">
+                            <div class="cname">${cat.name}</div>
+                            <div class="cval">${cat.count} (${pct}%)</div>
+                        </div>
+                        <div class="cbar">
+                            <i style="width: ${pct}%; background: ${cat.color};"></i>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Concluídas por ano — todas as concluídas do dataset, por ano de conclusão.
+            // Serve de referência histórica: o ano anterior é o ALVO a bater.
+            const completedByYear = {};
+            dataset.forEach(item => {
+                const s = item.status2.toUpperCase();
+                if (isConcluida(s)) {
+                    const yr = (item.anoConclusao && item.anoConclusao.trim())
+                        ? item.anoConclusao.trim()
+                        : extractYear(item.lote);
+                    completedByYear[yr] = (completedByYear[yr] || 0) + 1;
+                }
+            });
+
+            const prevYear = (parseInt(currentYear, 10) - 1).toString();
+            const alvo = completedByYear[prevYear] || 0;            // total do ano anterior (meta)
+            const atual = completedByYear[currentYear] || 0;        // já concluídas este ano
+            const rumoPct = alvo > 0 ? Math.round((atual / alvo) * 100) : 0;
+
+            // Ordena decrescente, ano atual sempre no topo
+            const sortedYears = Object.keys(completedByYear).sort((a, b) => {
+                if (a === currentYear) return -1;
+                if (b === currentYear) return 1;
+                return b.localeCompare(a);
+            });
+            const yearsContainer = document.getElementById('concluded-years-list');
+
+            if (sortedYears.length === 0) {
+                yearsContainer.innerHTML = '<div class="text-[10px] text-slate-500 py-3 text-center">Nenhuma concluída</div>';
+            } else {
+                yearsContainer.innerHTML = sortedYears.map(yr => {
+                    const count = completedByYear[yr];
+                    const isCurrent = (yr === currentYear);
+                    const isTarget = (yr === prevYear);
+                    // Barra do ano atual: progresso rumo ao alvo. Restantes: barra cheia (referência).
+                    const barPct = isCurrent ? Math.min(rumoPct, 100) : 100;
+                    const label = isCurrent ? `${yr} • Atual`
+                                : isTarget  ? `${yr} • Alvo`
+                                : yr;
+                    const barGrad = isTarget
+                        ? 'from-[var(--warn)] to-[var(--acc-1)]'
+                        : 'from-[var(--acc-1)] to-[var(--ok)]';
+                    return `
+                        <div class="year-row ${isCurrent ? 'year-current' : ''} flex flex-col gap-0.5">
+                            <div class="flex items-center justify-between font-bold ${isCurrent ? 'text-[11px]' : 'text-[9px]'}">
+                                <span class="${isCurrent ? 'text-[var(--acc-1)]' : (isTarget ? 'text-[var(--warn)]' : 'text-white')}">${label}</span>
+                                <span class="mono text-[var(--ok)]">${count} un.${isCurrent && alvo > 0 ? ` <span class="text-slate-500">/ ${alvo} (${rumoPct}%)</span>` : ''}</span>
+                            </div>
+                            <div class="${isCurrent ? 'h-1.5' : 'h-1'} bg-slate-900/60 rounded-full overflow-hidden">
+                                <div class="h-full rounded-full bg-gradient-to-r ${barGrad}" style="width: ${barPct}%;"></div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        function focusOnMarker(id, lat, long) {
+            highlightSelectedCard(id, false);
+
+            if (map && lat && long && !isNaN(lat) && !isNaN(long)) {
+                map.setView([lat, long], 11, { animate: true, duration: 1 });
+                
+                const marker = activeMarkersMap[id];
+                if (marker) {
+                    setTimeout(() => marker.openPopup(), 300);
+                }
+            }
+        }
+
+        function highlightSelectedCard(id, scrollToIt) {
+            if (activeHighlightId) {
+                const prev = document.getElementById(`card-${activeHighlightId}`);
+                if (prev) prev.classList.remove('selected-highlight');
+            }
+
+            activeHighlightId = id;
+
+            const el = document.getElementById(`card-${id}`);
+            if (el) {
+                el.classList.add('selected-highlight');
+                if (scrollToIt) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            }
+        }
+
+        function toggleDrawer(open) {
+            const overlay = document.getElementById('drawer-overlay');
+            if (open) {
+                overlay.classList.add('open');
+            } else {
+                overlay.classList.remove('open');
+            }
+        }
+
+        function populateDrawerTable() {
+            const tbody = document.getElementById('drawer-table-body');
+            tbody.innerHTML = '';
+
+            filteredData.forEach(item => {
+                const color = getStatusColor(item.status2);
+
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-900/50 transition-colors border-b border-slate-800/30">
+                        <td class="py-2.5 px-3 font-semibold text-[#51B8EA] font-mono">${item.lote}</td>
+                        <td class="py-2.5 px-3 font-medium text-white">${item.cliente}</td>
+                        <td class="py-2.5 px-3 text-slate-400">${item.pais}</td>
+                        <td class="py-2.5 px-3">
+                            <span class="text-[9px] font-extrabold px-2 py-0.5 rounded-full border border-opacity-30" style="color: ${color}; border-color: ${color}; background: rgba(255,255,255,0.01);">
+                                ${item.status2}
+                            </span>
+                        </td>
+                        <td class="py-2.5 px-3 text-slate-300">${item.tecnico}</td>
+                        <td class="py-2.5 px-3">
+                            <div class="flex items-center gap-1.5">
+                                <div class="w-12 bg-slate-800 rounded-full h-1">
+                                    <div class="h-1 rounded-full" style="width: ${item.percent}%; background: var(--acc-grad);"></div>
+                                </div>
+                                <span class="font-mono font-bold text-slate-200">${item.percent}%</span>
+                            </div>
+                        </td>
+                        <td class="py-2.5 px-3 font-mono text-[10px] text-slate-400">${item.serie}</td>
+                        <td class="py-2.5 px-3 text-right">
+                            <button onclick="toggleDrawer(false); focusOnMarker('${item.id}', ${item.lat}, ${item.long})" class="bg-slate-800 hover:bg-[#243553] p-1.5 rounded-md transition-all text-slate-300 hover:text-[#51B8EA]">
+                                <i data-lucide="map-pin" class="w-2.5 h-2.5"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            if (filteredData.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="text-center py-8 text-slate-500">Nenhum registo disponível</td>
+                    </tr>
+                `;
+            }
+
+            lucide.createIcons();
+        }
+
+        function exportToCSV() {
+            if (filteredData.length === 0) return;
+
+            const headers = ["LOTE", "CLIENTE", "PAÍS", "STATUS2", "TÉCNICO RESPONSÁVEL", "PROGRESSO (%)", "SÉRIE", "NUMERO INSTALACAO", "LATITUDE", "LONGITUDE"];
+            
+            const rows = filteredData.map(item => [
+                `"${item.lote}"`,
+                `"${item.cliente}"`,
+                `"${item.pais}"`,
+                `"${item.status2}"`,
+                `"${item.tecnico}"`,
+                `"${item.percent}%"`,
+                `"${item.serie}"`,
+                `"${item.numeroInstalacao}"`,
+                item.lat || "",
+                item.long || ""
+            ]);
+
+            const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+            const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            
+            if (link.download !== undefined) {
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", `Somengil_Filtro_Instalacoes_${new Date().toISOString().slice(0,10)}.csv`);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
+    </script>
+</body>
+</html>
