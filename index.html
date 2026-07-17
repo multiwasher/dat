@@ -1337,7 +1337,9 @@
 
         function buildCountryFilter() {
             const dropdown = document.getElementById('select-country');
-            const countries = [...new Set(rawData.map(item => item.pais))].filter(Boolean).sort();
+            // Sem spread/Set (evita depender de suporte ES6 em motores de browser muito antigos)
+            const allCountries = rawData.map(item => item.pais);
+            const countries = allCountries.filter((item, pos) => item && allCountries.indexOf(item) === pos).sort();
             dropdown.innerHTML = '<option value="">Todos os Países</option>';
             countries.forEach(country => {
                 const opt = document.createElement('option');
@@ -1847,7 +1849,9 @@
                 item.long || ""
             ]);
 
-            const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+            const csvRows = [headers.join(",")];
+            rows.forEach(r => csvRows.push(r.join(",")));
+            const csvContent = csvRows.join("\n");
             const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             
