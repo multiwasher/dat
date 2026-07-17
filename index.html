@@ -10,9 +10,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
-    <!-- Leaflet JS for Premium Dark Maps -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <!-- D3 + TopoJSON for Neon SVG World Map -->
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
     
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -89,7 +89,7 @@
             display: flex; align-items: center; justify-content: space-between;
             gap: 16px;
             padding: 12px 20px;
-            background: linear-gradient(180deg, rgba(24,35,59,0.95), rgba(14,21,38,0.98));
+            background: linear-gradient(180deg, rgba(24,35,59,0.45), rgba(14,21,38,0.48));
             border: 1px solid var(--line);
             border-radius: 16px;
             backdrop-filter: blur(8px);
@@ -302,27 +302,72 @@
         /* ============================================================= */
         /* ============================================================= */
         #panel-mapa .panel-body { padding: 0; position: relative; }
+
+        /* ----- Mapa Neon SVG (D3 + TopoJSON) ----- */
         #map {
             width: 100%; height: 100%; border: 0; display: block;
-            background: #1e2530;
+            position: relative;
+            overflow: hidden;
+            background: radial-gradient(circle at center, #0a1424 0%, #0c2130 88%, #0e80c7 100%);
         }
-        /* Clareia as tiles escuras mantendo o registo dark (afeta só o basemap) */
-        #map .leaflet-tile-pane { filter: brightness(1.55) contrast(0.92); }
+        .map-stage {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .map-svg {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.9;
+        }
+        .map-country {
+            fill: #4d4f50;
+            stroke: rgba(45, 46, 46, 0.22);
+            stroke-width: 0.6;
+        }
+        #mapPoints {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
 
-        /* Slow glow pulsante nos marcadores — a cor do halo segue o fill do ponto */
-        @keyframes pinGlow {
-            0%, 100% { filter: drop-shadow(0 0 1px currentColor); }
-            50%      { filter: drop-shadow(0 0 5px currentColor) drop-shadow(0 0 9px currentColor); }
+        /* Pontos simples — a cor segue o estado da instalação, sem glow nem animação */
+        .pulse-point {
+            position: absolute;
+            width: var(--point-size, 9px);
+            height: var(--point-size, 9px);
+            transform: translate(-50%, -50%);
+            background: var(--pulse-color, var(--acc-1));
+            border: 1px solid rgba(1, 4, 10, 0.6);
+            border-radius: 50%;
+            cursor: pointer;
+            pointer-events: auto;
         }
-        .glow-pin {
-            color: var(--acc-1);               /* fallback do halo */
-            animation: pinGlow 3.2s ease-in-out infinite;
-            transform-box: fill-box;
-            transform-origin: center;
+        .pulse-point.point-emphasis {
+            transform: translate(-50%, -50%) scale(1.6);
+            z-index: 30;
         }
-        @media (prefers-reduced-motion: reduce) {
-            .glow-pin { animation: none; }
+
+        /* Tooltip flutuante do mapa (substitui os popups do Leaflet) */
+        .map-tooltip {
+            position: fixed;
+            z-index: 900;
+            pointer-events: none;
+            opacity: 0;
+            transform: translateY(4px);
+            transition: opacity 0.15s ease, transform 0.15s ease;
+            background: rgba(14, 21, 38, 0.96);
+            border: 1px solid var(--line-strong);
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            backdrop-filter: blur(8px);
+            padding: 8px 10px;
+            max-width: 230px;
         }
+        .map-tooltip.show { opacity: 1; transform: translateY(0); }
 
         /* Legenda de estados — overlay no canto inferior esquerdo do mapa */
         .map-legend {
@@ -342,38 +387,6 @@
             width: 11px; height: 11px; border-radius: 50%;
             border: 1px solid #01040a; flex-shrink: 0;
         }
-
-        /* Leaflet Dark Custom Map style fixes */
-        .leaflet-container { background: #1e2530 !important; }
-
-        /* Slow glow — só marcadores que pedem ação (amarelo/vermelho) */
-        .glow-warn { animation: pulseWarn 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
-        .glow-bad  { animation: pulseBad  2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
-        @keyframes pulseWarn {
-            0%, 100% { filter: drop-shadow(0 0 1px rgba(251,191,36,0.5)); }
-            50%      { filter: drop-shadow(0 0 6px rgba(251,191,36,0.95)); }
-        }
-        @keyframes pulseBad {
-            0%, 100% { filter: drop-shadow(0 0 1px rgba(248,113,113,0.5)); }
-            50%      { filter: drop-shadow(0 0 7px rgba(248,113,113,0.95)); }
-        }
-        .leaflet-bar { border: 1px solid var(--line) !important; box-shadow: none !important; }
-        .leaflet-bar a {
-            background-color: #243553 !important;
-            color: var(--txt) !important;
-            border-bottom: 1px solid var(--line) !important;
-            transition: background 0.2s;
-        }
-        .leaflet-bar a:hover { background-color: var(--bg-elev) !important; color: var(--acc-1) !important; }
-        .leaflet-popup-content-wrapper {
-            background: rgba(14, 21, 38, 0.95) !important;
-            color: var(--txt) !important;
-            border: 1px solid var(--line-strong) !important;
-            border-radius: 12px !important;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.8) !important;
-            backdrop-filter: blur(8px);
-        }
-        .leaflet-popup-tip { background: rgba(14, 21, 38, 0.95) !important; border: 1px solid var(--line-strong) !important; }
 
         /* ----- EM INSTALAÇÃO — Cartões .mach ----- */
         .mach { 
@@ -738,13 +751,17 @@
                     <div class="badge" id="map-counter-badge">A carregar...</div>
                 </div>
                 <div class="panel-body">
-                    <div id="map"></div>
+                    <div id="map">
+                        <div class="map-stage" id="map-stage">
+                            <svg id="worldMapSvg" class="map-svg" aria-label="Mapa do Mundo"></svg>
+                            <div id="mapPoints"></div>
+                        </div>
+                    </div>
                     <div class="map-legend" aria-label="Legenda de estados">
                         <span class="lg-item"><i class="lg-dot" style="background:var(--ok)"></i>Concluída</span>
                         <span class="lg-item"><i class="lg-dot" style="background:var(--warn)"></i>Em Instalação</span>
                         <span class="lg-item"><i class="lg-dot" style="background:#22d3ee"></i>Agendada</span>
                         <span class="lg-item"><i class="lg-dot" style="background:var(--bad)"></i>Aguardar Info</span>
-                        <span class="lg-item"><i class="lg-dot" style="background:var(--idle)"></i>Sem estado</span>
                     </div>
                 </div>
             </div>
@@ -894,10 +911,11 @@
         let currentStatusFilter = "all";
         let currentCountryFilter = "";
         
-        let map = null;
-        let markersGroup = null;
-        let activeMarkersMap = {};
+        let worldFeatures = null;
+        let mapProjection = null;
+        let activePointsMap = {};
         let activeHighlightId = null;
+        let mapTooltipEl = null;
 
         // Base de dados local de emergência para manter a página online caso a rede falhe
         const fallbackData = [
@@ -939,22 +957,63 @@
             return match ? match[0] : 'S/ Ano';
         }
 
-        function initMap() {
-            map = L.map('map', {
-                center: [41.15, -8.62],
-                zoom: 4,
-                zoomControl: true,
-                scrollWheelZoom: true
+        const mapStage = document.getElementById('map-stage');
+        const worldMapSvg = document.getElementById('worldMapSvg');
+        const mapPointsLayer = document.getElementById('mapPoints');
+        const mapSvgSelection = d3.select(worldMapSvg);
+
+        // Desenha (ou redesenha) o mapa SVG do mundo e recalcula a projeção
+        function renderGeoMap() {
+            if (!worldFeatures) return;
+
+            const width = mapStage.clientWidth;
+            const height = mapStage.clientHeight;
+            if (!width || !height) return;
+
+            worldMapSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+
+            // Ajusta o enquadramento ignorando a Antártida (id ISO 010) — dá mais zoom
+            // aos continentes habitados; a Antártida continua desenhada, só fica cortada em baixo.
+            const fittingFeatures = {
+                type: 'FeatureCollection',
+                features: worldFeatures.features.filter(f => f.id !== '010' && f.properties?.name !== 'Antarctica')
+            };
+
+            mapProjection = d3.geoMercator().fitSize([width, height], fittingFeatures);
+            const path = d3.geoPath(mapProjection);
+
+            mapSvgSelection
+                .selectAll('path')
+                .data(worldFeatures.features)
+                .join('path')
+                .attr('class', 'map-country')
+                .attr('d', path);
+        }
+
+        async function initMap() {
+            // Tooltip flutuante (substitui os popups do Leaflet)
+            mapTooltipEl = document.createElement('div');
+            mapTooltipEl.className = 'map-tooltip';
+            document.body.appendChild(mapTooltipEl);
+
+            try {
+                const topoJsonData = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(res => res.json());
+                worldFeatures = topojson.feature(topoJsonData, topoJsonData.objects.countries);
+                renderGeoMap();
+                // Desenha os pinos que já possam ter sido calculados antes do mapa carregar
+                renderPinsOnMap();
+            } catch (err) {
+                console.warn('Falha ao carregar o mapa base:', err);
+            }
+
+            let resizeTimer = null;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(() => {
+                    renderGeoMap();
+                    renderPinsOnMap();
+                }, 150);
             });
-
-            // CartoDB Premium Darkmatter basemap
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-                subdomains: 'abcd',
-                maxZoom: 19
-            }).addTo(map);
-
-            markersGroup = L.layerGroup().addTo(map);
         }
 
         function loadSheetData() {
@@ -1134,62 +1193,97 @@
             return 'var(--idle)';
         }
 
+        // O mapa só mostra estas 4 categorias — tudo o resto (Transporte, Sem estado, etc.) fica de fora
+        function isMapEligibleStatus(statusStr) {
+            const s = (statusStr || '').toUpperCase();
+            return s.includes('CONCLUÍDA') || s.includes('CONCLUIDA')
+                || s.includes('AGUARDO')
+                || s.includes('AGENDADA')
+                || (s.includes('INSTALAÇÃO') && s.includes('EM'));
+        }
+
+        function buildTooltipHTML(item, color) {
+            return `
+                <div class="font-sans text-xs">
+                    <div class="flex items-center gap-1.5 mb-1.5">
+                        <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${color}"></span>
+                        <span style="font-size: 8px; font-weight:800; letter-spacing:0.04em; text-transform:uppercase; color:var(--txt-mute);">${item.status2}</span>
+                    </div>
+                    <h4 style="font-weight: 800; color:#fff; line-height:1.2; margin-bottom:4px; font-size:11px;">${item.cliente}</h4>
+                    <div style="border-top:1px solid var(--line); padding-top:4px; font-size:9.5px; color:var(--txt-faint);" class="grid grid-cols-2 gap-1">
+                        <div><b>Lote:</b> ${item.lote}</div>
+                        <div><b>Téc:</b> ${item.tecnico}</div>
+                        <div class="col-span-2"><b>Progresso:</b> ${item.percent}%</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function showMapTooltip(html, event) {
+            if (!mapTooltipEl) return;
+            mapTooltipEl.innerHTML = html;
+            mapTooltipEl.classList.add('show');
+            moveMapTooltip(event);
+        }
+
+        function moveMapTooltip(event) {
+            if (!mapTooltipEl) return;
+            const pad = 14;
+            const rect = mapTooltipEl.getBoundingClientRect();
+            let left = event.clientX + pad;
+            let top = event.clientY + pad;
+            if (left + rect.width > window.innerWidth - 8) left = event.clientX - rect.width - pad;
+            if (top + rect.height > window.innerHeight - 8) top = event.clientY - rect.height - pad;
+            mapTooltipEl.style.left = `${Math.max(8, left)}px`;
+            mapTooltipEl.style.top = `${Math.max(8, top)}px`;
+        }
+
+        function hideMapTooltip() {
+            if (mapTooltipEl) mapTooltipEl.classList.remove('show');
+        }
+
         function renderPinsOnMap() {
-            markersGroup.clearLayers();
-            activeMarkersMap = {};
-            const bounds = [];
+            mapPointsLayer.innerHTML = '';
+            activePointsMap = {};
+
+            const width = mapStage.clientWidth;
+            const height = mapStage.clientHeight;
+            let drawnCount = 0;
 
             filteredData.forEach(item => {
-                if (item.lat && item.long && !isNaN(item.lat) && !isNaN(item.long)) {
-                    const color = getStatusColor(item.status2);
-                    // Não desenhar "Sem estado" (idle) — só cria ruído no mapa
-                    if (color === 'var(--idle)') return;
-                    // Glow pulsante só para os que pedem ação: Aguardo Info (vermelho) e Em Instalação (amarelo)
-                    const s = (item.status2 || '').toUpperCase();
-                    let glowClass = 'glow-pin';
-                    if (s.includes('AGUARDO')) glowClass += ' glow-bad';
-                    else if (s.includes('INSTALAÇÃO') && s.includes('EM')) glowClass += ' glow-warn';
+                const lat = parseFloat(item.lat);
+                const long = parseFloat(item.long);
+                if (isNaN(lat) || isNaN(long)) return;
 
-                    const marker = L.circleMarker([item.lat, item.long], {
-                        radius: 8,
-                        fillColor: color,
-                        color: '#01040a',
-                        weight: 1,
-                        opacity: 1,
-                        fillOpacity: 0.95,
-                        className: glowClass
-                    });
+                // Só desenha Concluída, Em Instalação, Agendada e Aguardar Info
+                if (!isMapEligibleStatus(item.status2)) return;
+                const color = getStatusColor(item.status2);
 
-                    const tooltipHTML = `
-                        <div class="p-1 font-sans text-xs" style="min-width: 180px;">
-                            <div class="flex items-center gap-1.5 mb-1.5">
-                                <span class="w-2.5 h-2.5 rounded-full" style="background-color: ${color}"></span>
-                                <span style="font-size: 8px; font-weight:800; letter-spacing:0.04em; text-transform:uppercase; color:var(--txt-mute);">${item.status2}</span>
-                            </div>
-                            <h4 style="font-weight: 800; color:#fff; line-height:1.2; margin-bottom:4px; font-size:11px;">${item.cliente}</h4>
-                            <div style="border-top:1px solid var(--line); padding-top:4px; font-size:9.5px; color:var(--txt-faint);" class="grid grid-cols-2 gap-1">
-                                <div><b>Lote:</b> ${item.lote}</div>
-                                <div><b>Téc:</b> ${item.tecnico}</div>
-                                <div class="col-span-2"><b>Progresso:</b> ${item.percent}%</div>
-                            </div>
-                        </div>
-                    `;
+                drawnCount++;
+                if (!mapProjection) return; // mapa ainda a carregar; será redesenhado
 
-                    marker.bindPopup(tooltipHTML, { closeButton: false, offset: L.point(0, -2) });
-                    marker.on('click', () => highlightSelectedCard(item.id, true));
+                const projected = mapProjection([long, lat]);
+                if (!projected) return;
 
-                    marker.addTo(markersGroup);
-                    activeMarkersMap[item.id] = marker;
-                    bounds.push([item.lat, item.long]);
-                }
+                const point = document.createElement('div');
+                point.className = 'pulse-point';
+                point.style.left = `${(projected[0] / width) * 100}%`;
+                point.style.top = `${(projected[1] / height) * 100}%`;
+                point.style.setProperty('--pulse-color', color);
+                point.title = `${item.cliente} — ${item.status2}`;
+
+                const tooltipHTML = buildTooltipHTML(item, color);
+                point.addEventListener('mouseenter', (e) => showMapTooltip(tooltipHTML, e));
+                point.addEventListener('mousemove', moveMapTooltip);
+                point.addEventListener('mouseleave', hideMapTooltip);
+                point.addEventListener('click', () => highlightSelectedCard(item.id, true));
+
+                mapPointsLayer.appendChild(point);
+                activePointsMap[item.id] = point;
             });
 
-            if (bounds.length > 0 && map) {
-                map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
-            }
-
-            // Contador reflete só os marcadores efetivamente desenhados (exclui "Sem estado")
-            document.getElementById('map-counter-badge').textContent = `${bounds.length} Marcadores`;
+            // Contador reflete só os pontos efetivamente desenhados (exclui "Sem estado")
+            document.getElementById('map-counter-badge').textContent = `${drawnCount} Marcadores`;
         }
 
         function populateGridPanels() {
@@ -1446,13 +1540,10 @@
         function focusOnMarker(id, lat, long) {
             highlightSelectedCard(id, false);
 
-            if (map && lat && long && !isNaN(lat) && !isNaN(long)) {
-                map.setView([lat, long], 11, { animate: true, duration: 1 });
-                
-                const marker = activeMarkersMap[id];
-                if (marker) {
-                    setTimeout(() => marker.openPopup(), 300);
-                }
+            const point = activePointsMap[id];
+            if (point) {
+                point.classList.add('point-emphasis');
+                setTimeout(() => point.classList.remove('point-emphasis'), 2000);
             }
         }
 
