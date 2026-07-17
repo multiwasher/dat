@@ -1309,26 +1309,34 @@
             }
         }
 
+        // Um registo só é válido se a coluna A (LOTE) não estiver em branco nem for "-"
+        function isValidLote(loteValue) {
+            const lote = String(loteValue || '').trim();
+            return lote !== '' && lote !== '-';
+        }
+
         function processImportedData(data) {
-            rawData = data.map((item, idx) => {
-                return {
-                    id: 'inst-' + idx,
-                    lote: item.lote,
-                    status: item.status,
-                    satevo: item.satevo,
-                    numeroInstalacao: item.numeroInstalacao,
-                    tecnico: item.tecnico,
-                    lat: item.lat,
-                    long: item.long,
-                    status2: item.status2,
-                    percent: item.percent,
-                    serie: item.serie,
-                    pais: item.pais,
-                    cliente: item.cliente,
-                    anoConclusao: item.anoConclusao,
-                    anoEnc: item.anoEnc
-                };
-            });
+            rawData = data
+                .filter(item => isValidLote(item.lote))
+                .map((item, idx) => {
+                    return {
+                        id: 'inst-' + idx,
+                        lote: item.lote,
+                        status: item.status,
+                        satevo: item.satevo,
+                        numeroInstalacao: item.numeroInstalacao,
+                        tecnico: item.tecnico,
+                        lat: item.lat,
+                        long: item.long,
+                        status2: item.status2,
+                        percent: item.percent,
+                        serie: item.serie,
+                        pais: item.pais,
+                        cliente: item.cliente,
+                        anoConclusao: item.anoConclusao,
+                        anoEnc: item.anoEnc
+                    };
+                });
 
             buildCountryFilter();
             calculateAllKPIs();
