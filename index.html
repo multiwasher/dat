@@ -243,10 +243,19 @@
             gap: 12px;
         }
         #panel-mapa         { grid-column: 1; grid-row: 1 / span 2; }
-        #panel-instalacoes  { grid-column: 2; grid-row: 1; }
-        #panel-transportes  { grid-column: 2; grid-row: 2; }
         #panel-agendamentos { grid-column: 3; grid-row: 1; }
         #panel-analise      { grid-column: 3; grid-row: 2; }
+
+        /* Coluna do meio (Instalações/Transportes) com grid próprio: assim a proporção
+           entre estes dois painéis pode variar sem afetar a coluna dos Agendamentos/Análise. */
+        .grid-col-mid {
+            grid-column: 2;
+            grid-row: 1 / span 2;
+            display: grid;
+            grid-template-rows: 45fr 55fr;
+            gap: 12px;
+            min-height: 0;
+        }
 
         /* ============================================================= */
         /* ============================================================= */
@@ -626,9 +635,10 @@
             html, body { overflow: auto; }
             .app { height: auto; min-height: 100vh; overflow: visible; }
             .grid { grid-template-columns: 1fr; grid-template-rows: none; height: auto; flex: none; }
-            #panel-mapa, #panel-instalacoes, #panel-transportes, #panel-agendamentos, #panel-analise {
+            #panel-mapa, #panel-agendamentos, #panel-analise {
                 grid-column: auto; grid-row: auto;
             }
+            .grid-col-mid { display: contents; }
             #panel-mapa { min-height: 450px; height: 450px; }
             .panel { min-height: 280px; height: 340px; }
             .kpis-top-grid { grid-template-columns: repeat(3, 1fr); }
@@ -767,31 +777,33 @@
                 </div>
             </div>
 
-            <div class="panel" id="panel-instalacoes">
-                <div class="panel-head">
-                    <div class="ic"><i data-lucide="activity"></i></div>
-                    <div class="ttl">
-                        <h2>Em Instalação</h2>
-                        <span>Processamento técnico ativo</span>
+            <div class="grid-col-mid">
+                <div class="panel" id="panel-instalacoes">
+                    <div class="panel-head">
+                        <div class="ic"><i data-lucide="activity"></i></div>
+                        <div class="ttl">
+                            <h2>Em Instalação</h2>
+                            <span>Processamento técnico ativo</span>
+                        </div>
+                        <div class="badge" id="badge-count-instalacoes" style="background: rgba(251,191,36,0.1); color: var(--warn); border-color: rgba(251,191,36,0.25);">0</div>
                     </div>
-                    <div class="badge" id="badge-count-instalacoes" style="background: rgba(251,191,36,0.1); color: var(--warn); border-color: rgba(251,191,36,0.25);">0</div>
+                    <div class="panel-body">
+                        <div class="scroll" id="container-instalacoes"></div>
+                    </div>
                 </div>
-                <div class="panel-body">
-                    <div class="scroll" id="container-instalacoes"></div>
-                </div>
-            </div>
 
-            <div class="panel" id="panel-transportes">
-                <div class="panel-head">
-                    <div class="ic"><i data-lucide="navigation" style="color: #818cf8;"></i></div>
-                    <div class="ttl">
-                        <h2>Em Transporte</h2>
-                        <span>Trânsito de equipamentos</span>
+                <div class="panel" id="panel-transportes">
+                    <div class="panel-head">
+                        <div class="ic"><i data-lucide="navigation" style="color: #818cf8;"></i></div>
+                        <div class="ttl">
+                            <h2>Em Transporte</h2>
+                            <span>Trânsito de equipamentos</span>
+                        </div>
+                        <div class="badge" id="badge-count-transportes" style="background: rgba(99,102,241,0.1); color: #818cf8; border-color: rgba(99,102,241,0.25);">0</div>
                     </div>
-                    <div class="badge" id="badge-count-transportes" style="background: rgba(99,102,241,0.1); color: #818cf8; border-color: rgba(99,102,241,0.25);">0</div>
-                </div>
-                <div class="panel-body">
-                    <div class="scroll" id="container-transportes"></div>
+                    <div class="panel-body">
+                        <div class="scroll" id="container-transportes"></div>
+                    </div>
                 </div>
             </div>
 
