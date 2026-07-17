@@ -1387,18 +1387,13 @@
 
         function calculateAllKPIs() {
             const counts = { all: 0, transporte: 0, instalacao: 0, agendada: 0, aguardo: 0, concluida: 0 };
-            // "Aguardo Info Cliente" fica coerente com o "Performance Global": só conta
-            // os registos cuja DATA ENC. (coluna N) é do ano corrente.
-            const currentYear = new Date().getFullYear().toString();
 
             rawData.forEach(item => {
                 const s = item.status2.toUpperCase();
                 if (s.includes('TRANSPORTE') || s.includes('TRASNPORTE')) counts.transporte++;
                 else if (s.includes('INSTALAÇÃO') && s.includes('EM')) counts.instalacao++;
                 else if (s.includes('AGENDADA')) counts.agendada++;
-                else if (s.includes('AGUARDO')) {
-                    if (item.anoEnc && item.anoEnc.trim() === currentYear) counts.aguardo++;
-                }
+                else if (s.includes('AGUARDO')) counts.aguardo++;
                 else if (s.includes('CONCLUÍDA') || s.includes('CONCLUIDA')) counts.concluida++;
             });
 
@@ -1474,16 +1469,13 @@
         // Ano vigente: mesma regra usada no KPI e no Performance Global — cada estado
         // usa a sua própria data de referência.
         // • Concluída Instalação → DATA INSTALAÇÃO (coluna O) tem de ser deste ano.
-        // • Aguardo Info Cliente → DATA ENC. (coluna N) tem de ser deste ano.
-        // • Instalação Agendada / Em Instalação → sem data ainda, contam sempre (pipeline atual).
+        // • Aguardo Info Cliente / Instalação Agendada / Em Instalação → sem filtro de ano,
+        //   contam sempre (basta STATUS2 + LOTE válido, já garantido antes de chegar a rawData).
         function isAnoVigenteItem(item) {
             const s = item.status2.toUpperCase();
             const currentYear = new Date().getFullYear().toString();
             if (s.includes('CONCLUÍDA') || s.includes('CONCLUIDA')) {
                 return item.anoInstalacao && item.anoInstalacao.trim() === currentYear;
-            }
-            if (s.includes('AGUARDO')) {
-                return item.anoEnc && item.anoEnc.trim() === currentYear;
             }
             return true;
         }
@@ -1712,12 +1704,6 @@
                 else if (s.includes('AGENDADA') || s.includes('AGUARDO')) {
                     const isAwait = s.includes('AGUARDO');
 
-                    // "Aguardo Info" só mostra registos com data de encomenda (ENC) do ano vigente
-                    if (isAwait) {
-                        const anoAtual = new Date().getFullYear().toString();
-                        if (!item.anoEnc || item.anoEnc.trim() !== anoAtual) return;
-                    }
-
                     if (isAwait) aguardoCount++; else agendadasCount++;
 
                     const cardHtml = `
@@ -1763,16 +1749,14 @@
             const isAgendada = (s) => s.includes('AGENDADA');
             const isAguardo = (s) => s.includes('AGUARDO');
 
-            // Universo "ano vigente" — cada estado usa a sua própria data de referência,
-            // tal como no painel "Gestão e Planeamento":
+            // Universo "ano vigente":
             // • Concluída Instalação → DATA INSTALAÇÃO (coluna O) tem de ser deste ano.
-            // • Instalação Agendada  → sem data de instalação ainda, conta sempre (é o pipeline atual).
-            // • Aguardo Info Cliente → DATA ENC. (coluna N) tem de ser deste ano.
+            // • Aguardo Info Cliente / Instalação Agendada → sem filtro de ano, contam sempre
+            //   (basta STATUS2 + LOTE válido, é o pipeline atual).
             const anoVigente = dataset.filter(item => {
                 const s = item.status2.toUpperCase();
                 if (isConcluida(s)) return item.anoInstalacao && item.anoInstalacao.trim() === currentYear;
-                if (isAguardo(s)) return item.anoEnc && item.anoEnc.trim() === currentYear;
-                return isAgendada(s);
+                return isAguardo(s) || isAgendada(s);
             });
 
             // Gauge: % média apenas do universo do ano vigente
