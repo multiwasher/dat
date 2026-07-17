@@ -1166,6 +1166,8 @@
             let idxDataInstalacao = rawHeaders.indexOf('data instalação');
             if (idxDataInstalacao === -1) idxDataInstalacao = rawHeaders.indexOf('data instalacao');
 
+            const idxDataPretendida = rawHeaders.indexOf('data pretendida');
+
             const records = [];
 
             for (let i = 1; i < rows.length; i += 1) {
@@ -1215,7 +1217,8 @@
                     cliente: cliente || 'Sem identificação',
                     anoConclusao: idxDataConclusao !== -1 ? extractYearFromText(row[idxDataConclusao]) : '',
                     anoEnc: idxEnc !== -1 ? extractYearFromText(row[idxEnc]) : '',
-                    anoInstalacao: idxDataInstalacao !== -1 ? extractYearFromText(row[idxDataInstalacao]) : ''
+                    anoInstalacao: idxDataInstalacao !== -1 ? extractYearFromText(row[idxDataInstalacao]) : '',
+                    anoPretendida: idxDataPretendida !== -1 ? extractYearFromText(row[idxDataPretendida]) : ''
                 });
             }
 
@@ -1343,8 +1346,14 @@
         }
 
         function processImportedData(data) {
+            // Ano vigente: a app só mostra registos cuja DATA PRETENDIDA é do ano corrente,
+            // seja qual for o estado (STATUS2). Substitui os filtros de ano por categoria
+            // que existiam antes (DATA INSTALAÇÃO para Concluída, DATA ENC. para Aguardo, etc.).
+            const currentYear = new Date().getFullYear().toString();
+
             rawData = data
                 .filter(item => isValidLote(item.lote))
+                .filter(item => item.anoPretendida && item.anoPretendida.trim() === currentYear)
                 .map((item, idx) => {
                     return {
                         id: 'inst-' + idx,
@@ -1362,7 +1371,8 @@
                         cliente: item.cliente,
                         anoConclusao: item.anoConclusao,
                         anoEnc: item.anoEnc,
-                        anoInstalacao: item.anoInstalacao
+                        anoInstalacao: item.anoInstalacao,
+                        anoPretendida: item.anoPretendida
                     };
                 });
 
@@ -1466,20 +1476,6 @@
                 || (s.includes('INSTALAÇÃO') && s.includes('EM'));
         }
 
-        // Ano vigente: mesma regra usada no KPI e no Performance Global — cada estado
-        // usa a sua própria data de referência.
-        // • Concluída Instalação → DATA INSTALAÇÃO (coluna O) tem de ser deste ano.
-        // • Aguardo Info Cliente / Instalação Agendada / Em Instalação → sem filtro de ano,
-        //   contam sempre (basta STATUS2 + LOTE válido, já garantido antes de chegar a rawData).
-        function isAnoVigenteItem(item) {
-            const s = item.status2.toUpperCase();
-            const currentYear = new Date().getFullYear().toString();
-            if (s.includes('CONCLUÍDA') || s.includes('CONCLUIDA')) {
-                return item.anoInstalacao && item.anoInstalacao.trim() === currentYear;
-            }
-            return true;
-        }
-
         function buildTooltipHTML(item, color) {
             return `
                 <div class="font-sans text-xs">
@@ -1563,9 +1559,9 @@
                 const long = parseFloat(item.long);
                 if (isNaN(lat) || isNaN(long)) return;
 
-                // Só desenha Concluída, Em Instalação, Agendada e Aguardar Info do ano vigente
+                // Só desenha Concluída, Em Instalação, Agendada e Aguardar Info
+                // (o ano vigente já é garantido pelo filtro de DATA PRETENDIDA em rawData)
                 if (!isMapEligibleStatus(item.status2)) return;
-                if (!isAnoVigenteItem(item)) return;
 
                 drawnCount++;
                 const key = lat + ',' + long;
@@ -1742,6 +1738,7 @@
         function updateAnalyticalGauge() {
             const dataset = filteredData.length > 0 ? filteredData : rawData;
             // Ano vigente = ano corrente real (dd/mm/AAAA); avança sozinho todos os anos.
+            // (o ano vigente já é garantido pelo filtro de DATA PRETENDIDA em rawData)
             const currentYear = new Date().getFullYear().toString();
 
             // Helpers de classificação de estado (STATUS2, coluna H)
@@ -1749,14 +1746,10 @@
             const isAgendada = (s) => s.includes('AGENDADA');
             const isAguardo = (s) => s.includes('AGUARDO');
 
-            // Universo "ano vigente":
-            // • Concluída Instalação → DATA INSTALAÇÃO (coluna O) tem de ser deste ano.
-            // • Aguardo Info Cliente / Instalação Agendada → sem filtro de ano, contam sempre
-            //   (basta STATUS2 + LOTE válido, é o pipeline atual).
+            // Universo "ano vigente": Concluída Instalação, Instalação Agendada e Aguardo Info Cliente
             const anoVigente = dataset.filter(item => {
                 const s = item.status2.toUpperCase();
-                if (isConcluida(s)) return item.anoInstalacao && item.anoInstalacao.trim() === currentYear;
-                return isAguardo(s) || isAgendada(s);
+                return isConcluida(s) || isAguardo(s) || isAgendada(s);
             });
 
             // Gauge: % média apenas do universo do ano vigente
