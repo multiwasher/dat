@@ -395,6 +395,71 @@
         }
         .map-tooltip.show { opacity: 1; transform: translateY(0); }
 
+        /* Modal com toda a info ao clicar num ponto do mapa */
+        .point-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(6px);
+            z-index: 950;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+        .point-modal-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .point-modal-content {
+            background: #0d1627;
+            border: 1px solid var(--line-strong);
+            border-radius: 16px;
+            width: 100%;
+            max-width: 460px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+            transform: scale(0.96);
+            transition: transform 0.2s ease;
+        }
+        .point-modal-overlay.open .point-modal-content {
+            transform: scale(1);
+        }
+        .point-modal-header {
+            position: sticky;
+            top: 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 14px 16px;
+            background: #0d1627;
+            border-bottom: 1px solid var(--line);
+        }
+        .point-modal-close {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid var(--line-strong);
+            color: var(--txt-mute);
+            border-radius: 8px;
+            width: 28px;
+            height: 28px;
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .point-modal-close:hover { color: #fff; border-color: rgba(255,255,255,0.3); }
+        .point-modal-card {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--line);
+        }
+        .point-modal-card:last-child { border-bottom: none; }
+
         /* Legenda de estados — overlay no canto inferior esquerdo do mapa */
         .map-legend {
             position: absolute; left: 12px; bottom: 12px; z-index: 500;
@@ -891,6 +956,11 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Modal com toda a info ao clicar num ponto do mapa -->
+    <div class="point-modal-overlay" id="point-modal-overlay" onclick="if (event.target === this) closePointModal()">
+        <div class="point-modal-content" id="point-modal-content"></div>
     </div>
 
     <!-- Slide-out Table Drawer Overlay -->
@@ -1521,6 +1591,50 @@
             if (mapTooltipEl) mapTooltipEl.classList.remove('show');
         }
 
+        function buildPointModalHTML(items) {
+            const cards = items.map(item => {
+                const color = getStatusColor(item.status2);
+                return `
+                    <div class="point-modal-card">
+                        <div class="flex items-center gap-1.5 mb-2">
+                            <span class="w-2.5 h-2.5 rounded-full" style="background:${color}; flex:0 0 auto;"></span>
+                            <span style="font-size:9px; font-weight:800; letter-spacing:0.04em; text-transform:uppercase; color:var(--txt-mute);">${item.status2}</span>
+                        </div>
+                        <h4 style="font-weight:800; color:#fff; line-height:1.25; margin-bottom:8px; font-size:13px;">${item.cliente}</h4>
+                        <div style="font-size:11px; color:var(--txt-faint); line-height:1.7;" class="grid grid-cols-2 gap-x-3">
+                            <div><b>Lote:</b> ${item.lote || '—'}</div>
+                            <div><b>Técnico:</b> ${item.tecnico || '—'}</div>
+                            <div><b>País:</b> ${item.pais || '—'}</div>
+                            <div><b>Série:</b> ${item.serie || '—'}</div>
+                            <div><b>Nº Instalação:</b> ${item.numeroInstalacao || '—'}</div>
+                            <div><b>SN:</b> ${item.sn || '—'}</div>
+                            <div class="col-span-2"><b>Progresso:</b> ${item.percent}%</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            return `
+                <div class="point-modal-header">
+                    <h3 style="font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:0.04em; color:#fff;">
+                        ${items.length > 1 ? items.length + ' instalações neste local' : 'Detalhe da instalação'}
+                    </h3>
+                    <button class="point-modal-close" onclick="closePointModal()"><i data-lucide="x" class="w-4 h-4"></i></button>
+                </div>
+                <div>${cards}</div>
+            `;
+        }
+
+        function openPointModal(items) {
+            document.getElementById('point-modal-content').innerHTML = buildPointModalHTML(items);
+            document.getElementById('point-modal-overlay').classList.add('open');
+            lucide.createIcons();
+        }
+
+        function closePointModal() {
+            document.getElementById('point-modal-overlay').classList.remove('open');
+        }
+
         // Ordem de prioridade quando várias instalações partilham a mesma coordenada
         // (mesma morada/cadeia) — o ponto herda a cor do estado mais "urgente" do grupo.
         function statusPriorityRank(statusStr) {
@@ -1604,7 +1718,10 @@
                 point.addEventListener('mouseenter', (e) => showMapTooltip(tooltipHTML, e));
                 point.addEventListener('mousemove', moveMapTooltip);
                 point.addEventListener('mouseleave', hideMapTooltip);
-                point.addEventListener('click', () => highlightSelectedCard(representative.id, true));
+                point.addEventListener('click', () => {
+                    highlightSelectedCard(representative.id, true);
+                    openPointModal(items);
+                });
 
                 mapPointsLayer.appendChild(point);
                 items.forEach(item => { activePointsMap[item.id] = point; });
