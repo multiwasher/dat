@@ -1370,13 +1370,18 @@
 
         function calculateAllKPIs() {
             const counts = { all: 0, transporte: 0, instalacao: 0, agendada: 0, aguardo: 0, concluida: 0 };
+            // "Aguardo Info Cliente" fica coerente com o "Performance Global": só conta
+            // os registos cuja DATA ENC. (coluna N) é do ano corrente.
+            const currentYear = new Date().getFullYear().toString();
 
             rawData.forEach(item => {
                 const s = item.status2.toUpperCase();
                 if (s.includes('TRANSPORTE') || s.includes('TRASNPORTE')) counts.transporte++;
                 else if (s.includes('INSTALAÇÃO') && s.includes('EM')) counts.instalacao++;
                 else if (s.includes('AGENDADA')) counts.agendada++;
-                else if (s.includes('AGUARDO')) counts.aguardo++;
+                else if (s.includes('AGUARDO')) {
+                    if (item.anoEnc && item.anoEnc.trim() === currentYear) counts.aguardo++;
+                }
                 else if (s.includes('CONCLUÍDA') || s.includes('CONCLUIDA')) counts.concluida++;
             });
 
