@@ -1191,6 +1191,110 @@
             return match ? match[1] : '';
         }
 
+        // Sinónimos/variações de nomes de país que a folha pode conter -> nome canónico a mostrar.
+        // As chaves estão sem acentos e em minúsculas (ver normalizeCountryName).
+        const COUNTRY_NAME_ALIASES = {
+            'paises baixos': 'Holanda',
+            'holland': 'Holanda',
+            'netherlands': 'Holanda',
+            'the netherlands': 'Holanda',
+            'inglaterra': 'Reino Unido',
+            'england': 'Reino Unido',
+            'united kingdom': 'Reino Unido',
+            'great britain': 'Reino Unido',
+            'gra-bretanha': 'Reino Unido',
+            'grao-bretanha': 'Reino Unido',
+            'escocia': 'Reino Unido',
+            'scotland': 'Reino Unido',
+            'pais de gales': 'Reino Unido',
+            'wales': 'Reino Unido',
+            'irlanda do norte': 'Reino Unido',
+            'northern ireland': 'Reino Unido',
+            'uk': 'Reino Unido',
+            // Variações com/sem acento presentes na folha para o mesmo país (evita duplicar
+            // a entrada no filtro de países e no mapa).
+            'italia': 'Itália',
+            'polonia': 'Polónia',
+            'belgica': 'Bélgica',
+            'croacia': 'Croácia',
+            'suecia': 'Suécia',
+            'suica': 'Suíça',
+            'tailandia': 'Tailândia',
+            'australia': 'Austrália',
+            'romenia': 'Roménia',
+            'lituania': 'Lituânia',
+            'mexico': 'México',
+            'austria': 'Áustria'
+        };
+
+        // Centro aproximado (capital) de cada país, usado como localização de recurso quando a
+        // linha da folha não tem LatLong preenchido. Sem isto, o valor default (0,0) cai no
+        // Golfo da Guiné e o pino aparece "ao lado de África" mesmo para países como Reino Unido
+        // ou Lituânia. Chaves sem acentos e em minúsculas (mesmo critério de stripAccents).
+        const COUNTRY_CENTROIDS = {
+            'portugal': [38.7223, -9.1393],
+            'espanha': [40.4168, -3.7038],
+            'franca': [48.8566, 2.3522],
+            'alemanha': [52.5200, 13.4050],
+            'italia': [41.9028, 12.4964],
+            'paises baixos': [52.3676, 4.9041],
+            'holanda': [52.3676, 4.9041],
+            'inglaterra': [51.5074, -0.1278],
+            'reino unido': [51.5074, -0.1278],
+            'uk': [51.5074, -0.1278],
+            'belgica': [50.8503, 4.3517],
+            'austria': [48.2082, 16.3738],
+            'polonia': [52.2297, 21.0122],
+            'romenia': [44.4268, 26.1025],
+            'suecia': [59.3293, 18.0686],
+            'suica': [46.9480, 7.4474],
+            'dinamarca': [55.6761, 12.5683],
+            'noruega': [59.9139, 10.7522],
+            'finlandia': [60.1699, 24.9384],
+            'hungria': [47.4979, 19.0402],
+            'croacia': [45.8150, 15.9819],
+            'lituania': [54.6872, 25.2797],
+            'bielorussia': [53.9006, 27.5590],
+            'russia': [55.7558, 37.6173],
+            'israel': [31.7683, 35.2137],
+            'egipto': [30.0444, 31.2357],
+            'dubai': [25.2048, 55.2708],
+            'taiwan': [25.0330, 121.5654],
+            'tailandia': [13.7563, 100.5018],
+            'indonesia': [-6.2088, 106.8456],
+            'filipinas': [14.5995, 120.9842],
+            'mongolia': [47.8864, 106.9057],
+            'quirguistao': [42.8746, 74.5698],
+            'australia': [-35.2809, 149.1300],
+            'usa': [38.9072, -77.0369],
+            'canada': [45.4215, -75.6972],
+            'mexico': [19.4326, -99.1332],
+            'brasil': [-15.7939, -47.8828],
+            'argentina': [-34.6037, -58.3816],
+            'chile': [-33.4489, -70.6693],
+            'peru': [-12.0464, -77.0428],
+            'panama': [8.9824, -79.5199],
+            'guatemala': [14.6349, -90.5069],
+            'el salvador': [13.6929, -89.2182],
+            'rep. dominicana': [18.4861, -69.9312]
+        };
+
+        function stripAccents(value) {
+            return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        }
+
+        function normalizeCountryName(value) {
+            const clean = String(value || '').trim();
+            if (!clean) return clean;
+            const key = stripAccents(clean).toLowerCase();
+            return COUNTRY_NAME_ALIASES[key] || clean;
+        }
+
+        function getCountryCentroid(pais) {
+            const key = stripAccents(String(pais || '')).toLowerCase().trim();
+            return COUNTRY_CENTROIDS[key] || null;
+        }
+
         // Replica exatamente a deteção de colunas e a normalização de linhas de getSheetsData()
         // no Code.gs, mas a partir de linhas de CSV (texto) em vez de valores do Sheets API.
         function mapCsvRowsToRecords(rows) {
@@ -1263,6 +1367,8 @@
                     }
                 }
 
+                const paisNormalizado = normalizeCountryName((idxPais !== -1 && row[idxPais]) ? row[idxPais].trim() : 'Global');
+
                 // Coordenadas: coluna combinada "LatLong" com fallback para colunas separadas
                 let latVal, longVal;
                 if (idxLatLong !== -1 && row[idxLatLong]) {
@@ -1272,6 +1378,16 @@
                 } else {
                     latVal = parseFloat(row[idxLat]);
                     longVal = parseFloat(row[idxLong]);
+                }
+
+                // Sem coordenadas na folha: usa o centro aproximado do país em vez de (0,0)
+                // (que cai no Golfo da Guiné e faz o pino aparecer "ao lado de África").
+                if (isNaN(latVal) || isNaN(longVal)) {
+                    const centroid = getCountryCentroid(paisNormalizado);
+                    if (centroid) {
+                        latVal = centroid[0];
+                        longVal = centroid[1];
+                    }
                 }
 
                 records.push({
@@ -1285,7 +1401,7 @@
                     status2: (idxStatus2 !== -1 && row[idxStatus2]) ? row[idxStatus2].trim() : 'Não se aplica',
                     percent: numericPercent,
                     serie: idxSerie !== -1 ? (row[idxSerie] || '').trim() : '',
-                    pais: (idxPais !== -1 && row[idxPais]) ? row[idxPais].trim() : 'Global',
+                    pais: paisNormalizado,
                     cliente: cliente || 'Sem identificação',
                     anoConclusao: idxDataConclusao !== -1 ? extractYearFromText(row[idxDataConclusao]) : '',
                     anoEnc: idxEnc !== -1 ? extractYearFromText(row[idxEnc]) : '',
