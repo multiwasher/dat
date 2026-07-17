@@ -963,12 +963,6 @@
             setInterval(update, 1000);
         }
 
-        function extractYear(loteStr) {
-            if (!loteStr) return 'S/ Ano';
-            const match = loteStr.match(/(?:20|21)\d{2}/);
-            return match ? match[0] : 'S/ Ano';
-        }
-
         const mapStage = document.getElementById('map-stage');
         const worldMapSvg = document.getElementById('worldMapSvg');
         const mapPointsLayer = document.getElementById('mapPoints');
@@ -1140,6 +1134,9 @@
 
             const idxEnc = rawHeaders.indexOf('enc');
 
+            let idxDataInstalacao = rawHeaders.indexOf('data instalação');
+            if (idxDataInstalacao === -1) idxDataInstalacao = rawHeaders.indexOf('data instalacao');
+
             const records = [];
 
             for (let i = 1; i < rows.length; i += 1) {
@@ -1188,7 +1185,8 @@
                     pais: (idxPais !== -1 && row[idxPais]) ? row[idxPais].trim() : 'Global',
                     cliente: cliente || 'Sem identificação',
                     anoConclusao: idxDataConclusao !== -1 ? extractYearFromText(row[idxDataConclusao]) : '',
-                    anoEnc: idxEnc !== -1 ? extractYearFromText(row[idxEnc]) : ''
+                    anoEnc: idxEnc !== -1 ? extractYearFromText(row[idxEnc]) : '',
+                    anoInstalacao: idxDataInstalacao !== -1 ? extractYearFromText(row[idxDataInstalacao]) : ''
                 });
             }
 
@@ -1334,7 +1332,8 @@
                         pais: item.pais,
                         cliente: item.cliente,
                         anoConclusao: item.anoConclusao,
-                        anoEnc: item.anoEnc
+                        anoEnc: item.anoEnc,
+                        anoInstalacao: item.anoInstalacao
                     };
                 });
 
@@ -1656,23 +1655,24 @@
 
         function updateAnalyticalGauge() {
             const dataset = filteredData.length > 0 ? filteredData : rawData;
+            // Ano vigente = ano corrente real (dd/mm/AAAA); avança sozinho todos os anos.
             const currentYear = new Date().getFullYear().toString();
 
-            // Helpers de classificação de estado
+            // Helpers de classificação de estado (STATUS2, coluna H)
             const isConcluida = (s) => s.includes('CONCLUÍDA') || s.includes('CONCLUIDA');
-            const isEmInstalacao = (s) => s.includes('INSTALAÇÃO') && s.includes('EM');
+            const isAgendada = (s) => s.includes('AGENDADA');
             const isAguardo = (s) => s.includes('AGUARDO');
 
-            // Universo "ano vigente": concluídas DESTE ano + ativas Em Instalação e Aguardo Info.
-            // (As ativas não têm anoConclusao, mas representam trabalho a decorrer agora.)
+            // Universo "ano vigente" — cada estado usa a sua própria data de referência,
+            // tal como no painel "Gestão e Planeamento":
+            // • Concluída Instalação → DATA INSTALAÇÃO (coluna O) tem de ser deste ano.
+            // • Instalação Agendada  → sem data de instalação ainda, conta sempre (é o pipeline atual).
+            // • Aguardo Info Cliente → DATA ENC. (coluna N) tem de ser deste ano.
             const anoVigente = dataset.filter(item => {
                 const s = item.status2.toUpperCase();
-                if (isConcluida(s)) {
-                    const yr = (item.anoConclusao && item.anoConclusao.trim())
-                        ? item.anoConclusao.trim() : extractYear(item.lote);
-                    return yr === currentYear;
-                }
-                return isEmInstalacao(s) || isAguardo(s);
+                if (isConcluida(s)) return item.anoInstalacao && item.anoInstalacao.trim() === currentYear;
+                if (isAguardo(s)) return item.anoEnc && item.anoEnc.trim() === currentYear;
+                return isAgendada(s);
             });
 
             // Gauge: % média apenas do universo do ano vigente
@@ -1687,18 +1687,18 @@
             document.getElementById('gauge-value').textContent = avgProgress + '%';
 
             // Categorias — contadas apenas dentro do universo do ano vigente
-            const counts = { concluida: 0, instalacao: 0, aguardo: 0 };
+            const counts = { concluida: 0, agendada: 0, aguardo: 0 };
             anoVigente.forEach(item => {
                 const s = item.status2.toUpperCase();
                 if (isConcluida(s)) counts.concluida++;
-                else if (isEmInstalacao(s)) counts.instalacao++;
+                else if (isAgendada(s)) counts.agendada++;
                 else if (isAguardo(s)) counts.aguardo++;
             });
 
             const catList = document.getElementById('performance-categories-list');
             const items = [
                 { name: 'Instaladas ' + currentYear, count: counts.concluida, color: 'var(--ok)' },
-                { name: 'Em Instalação', count: counts.instalacao, color: 'var(--warn)' },
+                { name: 'Instalação Agendada', count: counts.agendada, color: 'var(--warn)' },
                 { name: 'Aguardar Info', count: counts.aguardo, color: 'var(--bad)' }
             ];
 
@@ -1717,15 +1717,13 @@
                 `;
             }).join('');
 
-            // Concluídas por ano — todas as concluídas do dataset, por ano de conclusão.
+            // Concluídas por ano — todas as concluídas do dataset, por ano de "DATA INSTALAÇÃO".
             // Serve de referência histórica: o ano anterior é o ALVO a bater.
             const completedByYear = {};
             dataset.forEach(item => {
                 const s = item.status2.toUpperCase();
-                if (isConcluida(s)) {
-                    const yr = (item.anoConclusao && item.anoConclusao.trim())
-                        ? item.anoConclusao.trim()
-                        : extractYear(item.lote);
+                if (isConcluida(s) && item.anoInstalacao && item.anoInstalacao.trim()) {
+                    const yr = item.anoInstalacao.trim();
                     completedByYear[yr] = (completedByYear[yr] || 0) + 1;
                 }
             });
@@ -1741,15 +1739,11 @@
             if (completedByYear[currentYear] === undefined) {
                 yearsContainer.innerHTML = '<div class="text-[10px] text-slate-500 py-3 text-center">Nenhuma concluída</div>';
             } else {
-                const barPct = Math.min(rumoPct, 100);
                 yearsContainer.innerHTML = `
                     <div class="year-row year-current flex flex-col gap-1.5">
                         <div class="flex items-center justify-between font-bold text-[15px]">
                             <span class="text-[var(--acc-1)]">${currentYear} • Atual</span>
                             <span class="mono text-[var(--ok)]">${atual} un.${alvo > 0 ? ` <span class="text-slate-400">/ ${alvo} (${rumoPct}%)</span>` : ''}</span>
-                        </div>
-                        <div class="h-2.5 bg-slate-900/60 rounded-full overflow-hidden">
-                            <div class="h-full rounded-full bg-gradient-to-r from-[var(--acc-1)] to-[var(--ok)]" style="width: ${barPct}%;"></div>
                         </div>
                     </div>
                 `;
