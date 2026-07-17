@@ -1168,6 +1168,8 @@
 
             const idxDataPretendida = rawHeaders.indexOf('data pretendida');
 
+            const idxSn = rawHeaders.indexOf('sn');
+
             const records = [];
 
             for (let i = 1; i < rows.length; i += 1) {
@@ -1218,7 +1220,8 @@
                     anoConclusao: idxDataConclusao !== -1 ? extractYearFromText(row[idxDataConclusao]) : '',
                     anoEnc: idxEnc !== -1 ? extractYearFromText(row[idxEnc]) : '',
                     anoInstalacao: idxDataInstalacao !== -1 ? extractYearFromText(row[idxDataInstalacao]) : '',
-                    anoPretendida: idxDataPretendida !== -1 ? extractYearFromText(row[idxDataPretendida]) : ''
+                    anoPretendida: idxDataPretendida !== -1 ? extractYearFromText(row[idxDataPretendida]) : '',
+                    sn: idxSn !== -1 ? (row[idxSn] || '').trim() : ''
                 });
             }
 
@@ -1372,7 +1375,8 @@
                         anoConclusao: item.anoConclusao,
                         anoEnc: item.anoEnc,
                         anoInstalacao: item.anoInstalacao,
-                        anoPretendida: item.anoPretendida
+                        anoPretendida: item.anoPretendida,
+                        sn: item.sn
                     };
                 });
 
@@ -1488,6 +1492,7 @@
                         <div><b>Lote:</b> ${item.lote}</div>
                         <div><b>Téc:</b> ${item.tecnico}</div>
                         <div class="col-span-2"><b>Progresso:</b> ${item.percent}%</div>
+                        ${item.sn ? `<div class="col-span-2"><b>SN:</b> ${item.sn}</div>` : ''}
                     </div>
                 </div>
             `;
@@ -1531,7 +1536,7 @@
             const rows = items.map(item => `
                 <div style="display:flex; align-items:center; gap:6px; padding:3px 0; border-top:1px solid var(--line);">
                     <span class="w-2 h-2 rounded-full" style="background-color:${getStatusColor(item.status2)}; flex:0 0 auto;"></span>
-                    <span style="font-size:9.5px; color:#fff; font-weight:700; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${item.cliente}</span>
+                    <span style="font-size:9.5px; color:#fff; font-weight:700; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${item.cliente}${item.sn ? ` <span style="color:var(--txt-faint); font-weight:400;">(SN: ${item.sn})</span>` : ''}</span>
                     <span style="font-size:8.5px; color:var(--txt-faint);">${item.percent}%</span>
                 </div>
             `).join('');
