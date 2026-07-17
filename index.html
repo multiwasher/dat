@@ -909,6 +909,15 @@
         // Configuração de Duplo Canal: Conecta diretamente à API do Web App do utilizador caso corra fora do Sheets
         const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbx6cu2yF5XjzRBgowff1VbNXpDlVb6ZuXOmHAYwPXRni34f25lxBeuEXPZ7p7h0mjBq/exec";
 
+        // Exportação CSV pública da mesma folha (mesmo mecanismo do dashboard de referência,
+        // já validado a funcionar em dispositivos externos como a TV) — usada como via principal
+        // fora do Sheets, evitando o redirect/CORS do Web App do Apps Script.
+        const SHEET_ID = "1w-2Umjj5Y-N0Xzh98C2lKj7wiLYlMte6k6LPhAMmGp4";
+        const SHEET_TAB_NAME = "dadosAppsheet";
+        // headers=1 é essencial: sem isto, o Google por vezes deteta mal quantas linhas
+        // são cabeçalho e mistura texto de linhas de dados na 1ª linha do CSV.
+        const CSV_EXPORT_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_TAB_NAME)}&headers=1`;
+
         let rawData = [];
         let filteredData = [];
         let currentStatusFilter = "all";
@@ -983,7 +992,7 @@
             // aos continentes habitados; a Antártida continua desenhada, só fica cortada em baixo.
             const fittingFeatures = {
                 type: 'FeatureCollection',
-                features: worldFeatures.features.filter(f => f.id !== '010' && f.properties?.name !== 'Antarctica')
+                features: worldFeatures.features.filter(f => f.id !== '010' && (!f.properties || f.properties.name !== 'Antarctica'))
             };
 
             mapProjection = d3.geoMercator().fitSize([width, height], fittingFeatures);
@@ -997,21 +1006,24 @@
                 .attr('d', path);
         }
 
-        async function initMap() {
+        function initMap() {
             // Tooltip flutuante (substitui os popups do Leaflet)
             mapTooltipEl = document.createElement('div');
             mapTooltipEl.className = 'map-tooltip';
             document.body.appendChild(mapTooltipEl);
 
-            try {
-                const topoJsonData = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(res => res.json());
-                worldFeatures = topojson.feature(topoJsonData, topoJsonData.objects.countries);
-                renderGeoMap();
-                // Desenha os pinos que já possam ter sido calculados antes do mapa carregar
-                renderPinsOnMap();
-            } catch (err) {
-                console.warn('Falha ao carregar o mapa base:', err);
-            }
+            // Sem async/await (evita depender de suporte ES2017 em motores de browser antigos)
+            fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
+                .then(res => res.json())
+                .then(topoJsonData => {
+                    worldFeatures = topojson.feature(topoJsonData, topoJsonData.objects.countries);
+                    renderGeoMap();
+                    // Desenha os pinos que já possam ter sido calculados antes do mapa carregar
+                    renderPinsOnMap();
+                })
+                .catch(err => {
+                    console.warn('Falha ao carregar o mapa base:', err);
+                });
 
             let resizeTimer = null;
             window.addEventListener('resize', () => {
@@ -1023,53 +1035,258 @@
             });
         }
 
+        // Parser de CSV tolerante a vírgulas/quebras de linha dentro de campos entre aspas
+        // (mesmo algoritmo do dashboard de referência, já validado nesta TV).
+        function parseCsv(text) {
+            const rows = [];
+            let row = [];
+            let value = '';
+            let inQuotes = false;
+
+            for (let i = 0; i < text.length; i += 1) {
+                const char = text[i];
+                const nextChar = text[i + 1];
+
+                if (char === '"') {
+                    if (inQuotes && nextChar === '"') {
+                        value += '"';
+                        i += 1;
+                    } else {
+                        inQuotes = !inQuotes;
+                    }
+                    continue;
+                }
+
+                if (char === ',' && !inQuotes) {
+                    row.push(value);
+                    value = '';
+                    continue;
+                }
+
+                if ((char === '\n' || char === '\r') && !inQuotes) {
+                    if (char === '\r' && nextChar === '\n') i += 1;
+                    row.push(value);
+                    value = '';
+                    if (row.some(cell => cell.trim() !== '')) {
+                        rows.push(row);
+                    }
+                    row = [];
+                    continue;
+                }
+
+                value += char;
+            }
+
+            if (value !== '' || row.length > 0) {
+                row.push(value);
+                if (row.some(cell => cell.trim() !== '')) {
+                    rows.push(row);
+                }
+            }
+
+            return rows;
+        }
+
+        const BOM_CHAR = String.fromCharCode(65279);
+        function normalizeHeaderCell(h) {
+            const clean = String(h || '').toLowerCase().trim();
+            return clean.charAt(0) === BOM_CHAR ? clean.slice(1) : clean;
+        }
+
+        function extractYearFromText(value) {
+            const match = String(value || '').match(/(\d{4})/);
+            return match ? match[1] : '';
+        }
+
+        // Replica exatamente a deteção de colunas e a normalização de linhas de getSheetsData()
+        // no Code.gs, mas a partir de linhas de CSV (texto) em vez de valores do Sheets API.
+        function mapCsvRowsToRecords(rows) {
+            if (!rows.length) return [];
+
+            const rawHeaders = rows[0].map(normalizeHeaderCell);
+
+            const idxLote = rawHeaders.indexOf('lote');
+            const idxStatus = rawHeaders.indexOf('status');
+            const idxSatevo = rawHeaders.indexOf('satevo');
+
+            let idxNumInst = rawHeaders.indexOf('numero instalação');
+            if (idxNumInst === -1) idxNumInst = rawHeaders.indexOf('numero instalacao');
+
+            let idxTecnico = rawHeaders.indexOf('técnico responsável');
+            if (idxTecnico === -1) idxTecnico = rawHeaders.indexOf('tecnico responsavel');
+
+            const idxLatLong = rawHeaders.indexOf('latlong');
+            let idxLat = rawHeaders.indexOf('lat');
+            if (idxLat === -1) idxLat = rawHeaders.indexOf('latitude');
+            let idxLong = rawHeaders.indexOf('long');
+            if (idxLong === -1) idxLong = rawHeaders.indexOf('longitude');
+
+            const idxStatus2 = rawHeaders.indexOf('status2');
+
+            let idxPercent = rawHeaders.indexOf('%');
+            if (idxPercent === -1) idxPercent = rawHeaders.indexOf('progresso');
+
+            let idxSerie = rawHeaders.indexOf('série');
+            if (idxSerie === -1) idxSerie = rawHeaders.indexOf('serie');
+
+            let idxPais = rawHeaders.indexOf('país');
+            if (idxPais === -1) idxPais = rawHeaders.indexOf('pais');
+
+            const idxCliente = rawHeaders.indexOf('cliente');
+
+            let idxDataConclusao = rawHeaders.indexOf('ano');
+            if (idxDataConclusao === -1) idxDataConclusao = rawHeaders.indexOf('data conclusão');
+            if (idxDataConclusao === -1) idxDataConclusao = rawHeaders.indexOf('data conclusao');
+
+            const idxEnc = rawHeaders.indexOf('enc');
+
+            const records = [];
+
+            for (let i = 1; i < rows.length; i += 1) {
+                const row = rows[i];
+                const cliente = idxCliente !== -1 ? (row[idxCliente] || '').trim() : '';
+                const lote = idxLote !== -1 ? (row[idxLote] || '').trim() : '';
+
+                // Ignorar linhas vazias ou sem identificadores chave
+                if (!cliente && !lote) continue;
+
+                // Tratamento robusto da percentagem (%)
+                const rawPct = idxPercent !== -1 ? row[idxPercent] : '';
+                let numericPercent = 0;
+                if (rawPct) {
+                    const cleanStr = String(rawPct).replace('%', '').trim().replace(',', '.');
+                    const parsedNum = parseFloat(cleanStr);
+                    if (!isNaN(parsedNum)) {
+                        numericPercent = (parsedNum <= 1 && cleanStr.indexOf('.') !== -1)
+                            ? Math.round(parsedNum * 100)
+                            : Math.round(parsedNum);
+                    }
+                }
+
+                // Coordenadas: coluna combinada "LatLong" com fallback para colunas separadas
+                let latVal, longVal;
+                if (idxLatLong !== -1 && row[idxLatLong]) {
+                    const coords = row[idxLatLong].split(',');
+                    latVal = parseFloat((coords[0] || '').trim());
+                    longVal = parseFloat((coords[1] || '').trim());
+                } else {
+                    latVal = parseFloat(row[idxLat]);
+                    longVal = parseFloat(row[idxLong]);
+                }
+
+                records.push({
+                    lote: lote,
+                    status: idxStatus !== -1 ? (row[idxStatus] || '').trim() : '',
+                    satevo: idxSatevo !== -1 ? (row[idxSatevo] || '').trim() : '',
+                    numeroInstalacao: idxNumInst !== -1 ? (row[idxNumInst] || '').trim() : '',
+                    tecnico: (idxTecnico !== -1 && row[idxTecnico]) ? row[idxTecnico].trim() : 'Sem designação',
+                    lat: isNaN(latVal) ? 0 : latVal,
+                    long: isNaN(longVal) ? 0 : longVal,
+                    status2: (idxStatus2 !== -1 && row[idxStatus2]) ? row[idxStatus2].trim() : 'Não se aplica',
+                    percent: numericPercent,
+                    serie: idxSerie !== -1 ? (row[idxSerie] || '').trim() : '',
+                    pais: (idxPais !== -1 && row[idxPais]) ? row[idxPais].trim() : 'Global',
+                    cliente: cliente || 'Sem identificação',
+                    anoConclusao: idxDataConclusao !== -1 ? extractYearFromText(row[idxDataConclusao]) : '',
+                    anoEnc: idxEnc !== -1 ? extractYearFromText(row[idxEnc]) : ''
+                });
+            }
+
+            return records;
+        }
+
+        // Via principal fora do Sheets: exportação pública de CSV (gviz) — provada nesta TV.
+        function loadFromCsvExport() {
+            return fetch(`${CSV_EXPORT_URL}&t=${Date.now()}`, { cache: 'no-store' })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status} (${response.statusText || 'sem detalhe'}) ao pedir o CSV`);
+                    }
+                    return response.text();
+                })
+                .then(text => {
+                    const records = mapCsvRowsToRecords(parseCsv(text));
+                    if (!records.length) {
+                        throw new Error('CSV sem registos válidos — confirmar nome da folha ("dadosAppsheet") e se está publicada (Ficheiro → Partilhar → Publicar na Web)');
+                    }
+                    processImportedData(records);
+                    setSyncStatus('CSV Live', 'ok');
+                });
+        }
+
+        // Via secundária: API do Web App do Apps Script (mantida como reserva)
+        function loadFromWebAppApi() {
+            return fetch(`${WEB_APP_URL}?action=get&t=${Date.now()}`)
+                .then(response => {
+                    const contentType = response.headers.get('content-type') || '';
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status} (${response.statusText || 'sem detalhe'})`);
+                    }
+
+                    // Se o Apps Script exigir sessão Google, o /exec redireciona para uma
+                    // página de login e devolve HTML em vez de JSON.
+                    if (!contentType.includes('json')) {
+                        throw new Error(`Resposta não é JSON (content-type: ${contentType || 'desconhecido'})`);
+                    }
+
+                    return response.json();
+                })
+                .then(data => {
+                    if (data && data.error) {
+                        throw new Error(`Erro devolvido pelo Apps Script: ${data.error}`);
+                    }
+                    if (!data || !data.length) {
+                        throw new Error('Resposta JSON vazia (0 registos)');
+                    }
+                    processImportedData(data);
+                    setSyncStatus('API Live', 'ok');
+                });
+        }
+
         function loadSheetData() {
             setSyncStatus('A ligar...', 'warn');
-            
+
             // Caso 1: A correr dentro do Google Sheets (Nativo)
             if (typeof google !== 'undefined' && google.script && google.script.run) {
                 google.script.run
                     .withSuccessHandler(function(response) {
                         if (response && response.error) {
                             console.error("Erro no Apps Script:", response.error);
-                            loadFallbackData();
+                            loadFallbackData(response.error);
                         } else if (response && response.length > 0) {
                             processImportedData(response);
                             setSyncStatus('Conectado Live', 'ok');
                         } else {
-                            loadFallbackData();
+                            loadFallbackData('Resposta vazia do Apps Script');
                         }
                     })
                     .withFailureHandler(function(err) {
                         console.error("Falha na chamada do Apps Script:", err);
-                        loadFallbackData();
+                        loadFallbackData(String(err));
                     })
                     .getSheetsData();
-            } else {
-                // Caso 2: A correr no preview ou localmente (Faz fetch assíncrono ao Web App)
-                console.log("Fora do Sheets. A utilizar API externa do Web App...");
-                
-                fetch(`${WEB_APP_URL}?action=get&t=${Date.now()}`)
-                    .then(response => {
-                        if (!response.ok) throw new Error("Erro na resposta do servidor");
-                        return response.json();
-                    })
-                    .then(data => {
-                        if (data && data.length > 0) {
-                            processImportedData(data);
-                            setSyncStatus('API Live', 'ok');
-                        } else {
-                            loadFallbackData();
-                        }
-                    })
-                    .catch(err => {
-                        console.warn("Ligação à API falhou. A carregar dados de segurança locais:", err);
-                        loadFallbackData();
-                    });
+                return;
             }
+
+            // Caso 2: A correr fora do Sheets (preview, hospedagem externa, TV) — usa primeiro a
+            // exportação pública de CSV (mesmo mecanismo já validado nesta TV); só recorre à
+            // API do Web App como 2ª tentativa antes de cair nos dados de segurança locais.
+            console.log("Fora do Sheets. A utilizar exportação CSV pública da folha...");
+
+            loadFromCsvExport()
+                .catch(csvErr => {
+                    console.warn("Exportação CSV falhou, a tentar API do Web App:", csvErr.message);
+                    return loadFromWebAppApi();
+                })
+                .catch(finalErr => {
+                    console.error("Ambas as fontes falharam:", finalErr.message, finalErr);
+                    loadFallbackData(finalErr.message);
+                });
         }
 
-        function loadFallbackData() {
+        function loadFallbackData(reason) {
+            if (reason) console.warn('Motivo do fallback:', reason);
             processImportedData(fallbackData);
             setSyncStatus('Modo Offline', 'bad');
         }
