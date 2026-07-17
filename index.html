@@ -359,6 +359,23 @@
             transform: translate(-50%, -50%) scale(1.6);
             z-index: 30;
         }
+        /* Contador de instalações empilhadas no mesmo local (mesma morada/cadeia) */
+        .pulse-badge {
+            position: absolute;
+            top: -6px;
+            right: -7px;
+            min-width: 13px;
+            height: 13px;
+            padding: 0 2px;
+            border-radius: 50%;
+            background: #0d1627;
+            border: 1px solid rgba(255,255,255,0.35);
+            color: #fff;
+            font-size: 8px;
+            font-weight: 800;
+            line-height: 12px;
+            text-align: center;
+        }
 
         /* Tooltip flutuante do mapa (substitui os popups do Leaflet) */
         .map-tooltip {
@@ -1454,6 +1471,23 @@
                 || (s.includes('INSTALAÇÃO') && s.includes('EM'));
         }
 
+        // Ano vigente: mesma regra usada no KPI e no Performance Global — cada estado
+        // usa a sua própria data de referência.
+        // • Concluída Instalação → DATA INSTALAÇÃO (coluna O) tem de ser deste ano.
+        // • Aguardo Info Cliente → DATA ENC. (coluna N) tem de ser deste ano.
+        // • Instalação Agendada / Em Instalação → sem data ainda, contam sempre (pipeline atual).
+        function isAnoVigenteItem(item) {
+            const s = item.status2.toUpperCase();
+            const currentYear = new Date().getFullYear().toString();
+            if (s.includes('CONCLUÍDA') || s.includes('CONCLUIDA')) {
+                return item.anoInstalacao && item.anoInstalacao.trim() === currentYear;
+            }
+            if (s.includes('AGUARDO')) {
+                return item.anoEnc && item.anoEnc.trim() === currentYear;
+            }
+            return true;
+        }
+
         function buildTooltipHTML(item, color) {
             return `
                 <div class="font-sans text-xs">
@@ -1494,6 +1528,33 @@
             if (mapTooltipEl) mapTooltipEl.classList.remove('show');
         }
 
+        // Ordem de prioridade quando várias instalações partilham a mesma coordenada
+        // (mesma morada/cadeia) — o ponto herda a cor do estado mais "urgente" do grupo.
+        function statusPriorityRank(statusStr) {
+            const s = (statusStr || '').toUpperCase();
+            if (s.includes('AGUARDO')) return 0;
+            if (s.includes('AGENDADA')) return 1;
+            if (s.includes('INSTALAÇÃO') && s.includes('EM')) return 2;
+            return 3; // Concluída
+        }
+
+        function buildGroupTooltipHTML(items) {
+            if (items.length === 1) return buildTooltipHTML(items[0], getStatusColor(items[0].status2));
+            const rows = items.map(item => `
+                <div style="display:flex; align-items:center; gap:6px; padding:3px 0; border-top:1px solid var(--line);">
+                    <span class="w-2 h-2 rounded-full" style="background-color:${getStatusColor(item.status2)}; flex:0 0 auto;"></span>
+                    <span style="font-size:9.5px; color:#fff; font-weight:700; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${item.cliente}</span>
+                    <span style="font-size:8.5px; color:var(--txt-faint);">${item.percent}%</span>
+                </div>
+            `).join('');
+            return `
+                <div class="font-sans text-xs">
+                    <div style="font-weight:800; color:#fff; font-size:11px; margin-bottom:2px;">${items.length} instalações neste local</div>
+                    <div>${rows}</div>
+                </div>
+            `;
+        }
+
         function renderPinsOnMap() {
             mapPointsLayer.innerHTML = '';
             activePointsMap = {};
@@ -1502,36 +1563,58 @@
             const height = mapStage.clientHeight;
             let drawnCount = 0;
 
+            // Agrupa por coordenada: instalações no mesmo local (ex: cadeias de lojas)
+            // partilham exatamente o mesmo pixel e escondiam-se umas às outras.
+            const groups = {};
             filteredData.forEach(item => {
                 const lat = parseFloat(item.lat);
                 const long = parseFloat(item.long);
                 if (isNaN(lat) || isNaN(long)) return;
 
-                // Só desenha Concluída, Em Instalação, Agendada e Aguardar Info
+                // Só desenha Concluída, Em Instalação, Agendada e Aguardar Info do ano vigente
                 if (!isMapEligibleStatus(item.status2)) return;
-                const color = getStatusColor(item.status2);
+                if (!isAnoVigenteItem(item)) return;
 
                 drawnCount++;
+                const key = lat + ',' + long;
+                if (!groups[key]) groups[key] = { lat, long, items: [] };
+                groups[key].items.push(item);
+            });
+
+            Object.values(groups).forEach(group => {
                 if (!mapProjection) return; // mapa ainda a carregar; será redesenhado
 
-                const projected = mapProjection([long, lat]);
+                const projected = mapProjection([group.long, group.lat]);
                 if (!projected) return;
+
+                const items = group.items.slice().sort((a, b) => statusPriorityRank(a.status2) - statusPriorityRank(b.status2));
+                const representative = items[0];
+                const color = getStatusColor(representative.status2);
 
                 const point = document.createElement('div');
                 point.className = 'pulse-point';
                 point.style.left = `${(projected[0] / width) * 100}%`;
                 point.style.top = `${(projected[1] / height) * 100}%`;
                 point.style.setProperty('--pulse-color', color);
-                point.title = `${item.cliente} — ${item.status2}`;
+                point.title = items.length > 1
+                    ? `${items.length} instalações — ${representative.cliente} e outras`
+                    : `${representative.cliente} — ${representative.status2}`;
 
-                const tooltipHTML = buildTooltipHTML(item, color);
+                if (items.length > 1) {
+                    const badge = document.createElement('span');
+                    badge.className = 'pulse-badge';
+                    badge.textContent = items.length;
+                    point.appendChild(badge);
+                }
+
+                const tooltipHTML = buildGroupTooltipHTML(items);
                 point.addEventListener('mouseenter', (e) => showMapTooltip(tooltipHTML, e));
                 point.addEventListener('mousemove', moveMapTooltip);
                 point.addEventListener('mouseleave', hideMapTooltip);
-                point.addEventListener('click', () => highlightSelectedCard(item.id, true));
+                point.addEventListener('click', () => highlightSelectedCard(representative.id, true));
 
                 mapPointsLayer.appendChild(point);
-                activePointsMap[item.id] = point;
+                items.forEach(item => { activePointsMap[item.id] = point; });
             });
 
             // Contador reflete só os pontos efetivamente desenhados (exclui "Sem estado")
