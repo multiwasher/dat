@@ -308,7 +308,7 @@
             width: 100%; height: 100%; border: 0; display: block;
             position: relative;
             overflow: hidden;
-            background: radial-gradient(circle at center, #0a1424 0%, #0c2130 88%, #0e80c7 100%);
+            background: radial-gradient(circle at center, #020202 0%, #0c2130 88%, #0e80c7 100%);
         }
         .map-stage {
             position: absolute;
@@ -324,7 +324,7 @@
             opacity: 0.9;
         }
         .map-country {
-            fill: #4d4f50;
+            fill: #797c7e;
             stroke: rgba(45, 46, 46, 0.22);
             stroke-width: 0.6;
         }
@@ -532,7 +532,9 @@
 
         /* ============================================================= */
         /* ============================================================= */
-        .cont-wrap { display: flex; gap: 14px; height: 100%; align-items: center; justify-content: space-between; }
+        .perf-wrap { display: flex; flex-direction: column; height: 100%; gap: 12px; }
+        .perf-row-top { display: flex; gap: 14px; align-items: center; justify-content: space-between; flex: 0 0 auto; }
+        .perf-row-bottom { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; justify-content: center; border-top: 1px solid var(--line); padding-top: 10px; }
         .cont-left { flex: 0 0 110px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         
         /* Circular SVG Gauge */
@@ -546,7 +548,6 @@
         .gaugebox .center .g-l { font-size: 7px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: var(--txt-mute); margin-top: 3px; }
         
         .cont-mid { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
-        .cont-right { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 8px; border-left: 1px solid var(--line); padding-left: 14px; }
 
         /* Realce do ano atual na lista "Concluídas por Ano" */
         .year-row.year-current {
@@ -827,33 +828,35 @@
                     <div class="badge">Estatísticas</div>
                 </div>
                 <div class="panel-body">
-                    <div class="cont-wrap">
-                        <div class="cont-left">
-                            <div class="gaugebox">
-                                <svg viewBox="0 0 100 100">
-                                    <defs>
-                                        <linearGradient id="gauge-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                                            <stop offset="0%" stop-color="#51B8EA" />
-                                            <stop offset="100%" stop-color="#1B4794" />
-                                        </linearGradient>
-                                    </defs>
-                                    <circle class="circle-bg" cx="50" cy="50" r="40" />
-                                    <circle class="circle-bar" id="gauge-circle-progress" cx="50" cy="50" r="40" />
-                                </svg>
-                                <div class="center">
-                                    <div class="g-v" id="gauge-value">0%</div>
-                                    <div class="g-l">Progresso</div>
+                    <div class="perf-wrap">
+                        <div class="perf-row-top">
+                            <div class="cont-left">
+                                <div class="gaugebox">
+                                    <svg viewBox="0 0 100 100">
+                                        <defs>
+                                            <linearGradient id="gauge-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <stop offset="0%" stop-color="#51B8EA" />
+                                                <stop offset="100%" stop-color="#1B4794" />
+                                            </linearGradient>
+                                        </defs>
+                                        <circle class="circle-bg" cx="50" cy="50" r="40" />
+                                        <circle class="circle-bar" id="gauge-circle-progress" cx="50" cy="50" r="40" />
+                                    </svg>
+                                    <div class="center">
+                                        <div class="g-v" id="gauge-value">0%</div>
+                                        <div class="g-l">Progresso</div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        
-                        <div class="cont-mid" id="performance-categories-list"></div>
 
-                        <div class="cont-right">
-                            <div class="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 border-b border-slate-700/50 pb-0.5">
+                            <div class="cont-mid" id="performance-categories-list"></div>
+                        </div>
+
+                        <div class="perf-row-bottom">
+                            <div class="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-700/50 pb-1">
                                 Concluídas por Ano
                             </div>
-                            <div class="scroll flex flex-col gap-1.5" id="concluded-years-list" style="max-height: 85px;"></div>
+                            <div class="flex-1 flex flex-col justify-center" id="concluded-years-list"></div>
                         </div>
                     </div>
                 </div>
@@ -1499,41 +1502,24 @@
             const atual = completedByYear[currentYear] || 0;        // já concluídas este ano
             const rumoPct = alvo > 0 ? Math.round((atual / alvo) * 100) : 0;
 
-            // Ordena decrescente, ano atual sempre no topo
-            const sortedYears = Object.keys(completedByYear).sort((a, b) => {
-                if (a === currentYear) return -1;
-                if (b === currentYear) return 1;
-                return b.localeCompare(a);
-            });
+            // Mostra apenas o ano vigente
             const yearsContainer = document.getElementById('concluded-years-list');
 
-            if (sortedYears.length === 0) {
+            if (completedByYear[currentYear] === undefined) {
                 yearsContainer.innerHTML = '<div class="text-[10px] text-slate-500 py-3 text-center">Nenhuma concluída</div>';
             } else {
-                yearsContainer.innerHTML = sortedYears.map(yr => {
-                    const count = completedByYear[yr];
-                    const isCurrent = (yr === currentYear);
-                    const isTarget = (yr === prevYear);
-                    // Barra do ano atual: progresso rumo ao alvo. Restantes: barra cheia (referência).
-                    const barPct = isCurrent ? Math.min(rumoPct, 100) : 100;
-                    const label = isCurrent ? `${yr} • Atual`
-                                : isTarget  ? `${yr} • Alvo`
-                                : yr;
-                    const barGrad = isTarget
-                        ? 'from-[var(--warn)] to-[var(--acc-1)]'
-                        : 'from-[var(--acc-1)] to-[var(--ok)]';
-                    return `
-                        <div class="year-row ${isCurrent ? 'year-current' : ''} flex flex-col gap-0.5">
-                            <div class="flex items-center justify-between font-bold ${isCurrent ? 'text-[11px]' : 'text-[9px]'}">
-                                <span class="${isCurrent ? 'text-[var(--acc-1)]' : (isTarget ? 'text-[var(--warn)]' : 'text-white')}">${label}</span>
-                                <span class="mono text-[var(--ok)]">${count} un.${isCurrent && alvo > 0 ? ` <span class="text-slate-500">/ ${alvo} (${rumoPct}%)</span>` : ''}</span>
-                            </div>
-                            <div class="${isCurrent ? 'h-1.5' : 'h-1'} bg-slate-900/60 rounded-full overflow-hidden">
-                                <div class="h-full rounded-full bg-gradient-to-r ${barGrad}" style="width: ${barPct}%;"></div>
-                            </div>
+                const barPct = Math.min(rumoPct, 100);
+                yearsContainer.innerHTML = `
+                    <div class="year-row year-current flex flex-col gap-1.5">
+                        <div class="flex items-center justify-between font-bold text-[15px]">
+                            <span class="text-[var(--acc-1)]">${currentYear} • Atual</span>
+                            <span class="mono text-[var(--ok)]">${atual} un.${alvo > 0 ? ` <span class="text-slate-400">/ ${alvo} (${rumoPct}%)</span>` : ''}</span>
                         </div>
-                    `;
-                }).join('');
+                        <div class="h-2.5 bg-slate-900/60 rounded-full overflow-hidden">
+                            <div class="h-full rounded-full bg-gradient-to-r from-[var(--acc-1)] to-[var(--ok)]" style="width: ${barPct}%;"></div>
+                        </div>
+                    </div>
+                `;
             }
         }
 
