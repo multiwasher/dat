@@ -1128,7 +1128,6 @@
 
         function calculateAllKPIs() {
             const counts = { all: 0, transporte: 0, instalacao: 0, agendada: 0, aguardo: 0, concluida: 0 };
-            counts.all = rawData.length;
 
             rawData.forEach(item => {
                 const s = item.status2.toUpperCase();
@@ -1138,6 +1137,9 @@
                 else if (s.includes('AGUARDO')) counts.aguardo++;
                 else if (s.includes('CONCLUÍDA') || s.includes('CONCLUIDA')) counts.concluida++;
             });
+
+            // Instalações Globais = soma das 5 categorias (exclui "Sem estado")
+            counts.all = counts.transporte + counts.instalacao + counts.agendada + counts.aguardo + counts.concluida;
 
             document.getElementById('kpi-val-all').textContent = counts.all;
             document.getElementById('kpi-val-transporte').textContent = counts.transporte;
