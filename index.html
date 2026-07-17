@@ -1867,23 +1867,13 @@
             const isConcluida = (s) => s.includes('CONCLUÍDA') || s.includes('CONCLUIDA');
             const isAgendada = (s) => s.includes('AGENDADA');
             const isAguardo = (s) => s.includes('AGUARDO');
+            const isTransporte = (s) => s.includes('TRANSPORTE') || s.includes('TRASNPORTE');
 
             // Universo "ano vigente": Concluída Instalação, Instalação Agendada e Aguardo Info Cliente
             const anoVigente = dataset.filter(item => {
                 const s = item.status2.toUpperCase();
                 return isConcluida(s) || isAguardo(s) || isAgendada(s);
             });
-
-            // Gauge: % média apenas do universo do ano vigente
-            const totalSum = anoVigente.reduce((sum, item) => sum + item.percent, 0);
-            const avgProgress = anoVigente.length > 0 ? Math.round(totalSum / anoVigente.length) : 0;
-
-            const circle = document.getElementById('gauge-circle-progress');
-            const circumference = 2 * Math.PI * 40; // 251.2
-            const offset = circumference - (avgProgress / 100) * circumference;
-            circle.style.strokeDashoffset = offset;
-
-            document.getElementById('gauge-value').textContent = avgProgress + '%';
 
             // Categorias — contadas apenas dentro do universo do ano vigente
             const counts = { concluida: 0, agendada: 0, aguardo: 0 };
@@ -1893,6 +1883,18 @@
                 else if (isAgendada(s)) counts.agendada++;
                 else if (isAguardo(s)) counts.aguardo++;
             });
+
+            // Gauge: taxa de conclusão = Concluída / (Concluída + Agendada + Aguardo + Em Transporte)
+            const transporteCount = dataset.filter(item => isTransporte(item.status2.toUpperCase())).length;
+            const totalUniverso = counts.concluida + counts.agendada + counts.aguardo + transporteCount;
+            const avgProgress = totalUniverso > 0 ? Math.round((counts.concluida / totalUniverso) * 100) : 0;
+
+            const circle = document.getElementById('gauge-circle-progress');
+            const circumference = 2 * Math.PI * 40; // 251.2
+            const offset = circumference - (avgProgress / 100) * circumference;
+            circle.style.strokeDashoffset = offset;
+
+            document.getElementById('gauge-value').textContent = avgProgress + '%';
 
             const catList = document.getElementById('performance-categories-list');
             const items = [
