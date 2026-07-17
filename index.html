@@ -11,14 +11,14 @@
     <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
     <!-- D3 + TopoJSON for Neon SVG World Map -->
-    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-    <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
-    
+    <script defer src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+
     <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script defer src="https://unpkg.com/lucide@latest"></script>
 
     <!-- Tailwind CSS (for layout and utility styling)  -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.tailwindcss.com"></script>
 
     <style>
         :root {
@@ -929,12 +929,12 @@
             { lote: "L-2025-005", status: "Pendente", satevo: "EV-19", numeroInstalacao: "INS-912", tecnico: "Hans Müller", lat: 52.5200, long: 13.4050, status2: "Aguardo Info Cliente", percent: 5, serie: "S-300", pais: "Alemanha", cliente: "Edeka Berlin" }
         ];
 
-        window.onload = function() {
+        document.addEventListener('DOMContentLoaded', function() {
             lucide.createIcons();
             startClock();
             initMap();
             loadSheetData();
-        };
+        });
 
         function startClock() {
             function update() {
@@ -963,7 +963,7 @@
         const mapStage = document.getElementById('map-stage');
         const worldMapSvg = document.getElementById('worldMapSvg');
         const mapPointsLayer = document.getElementById('mapPoints');
-        const mapSvgSelection = d3.select(worldMapSvg);
+        let mapSvgSelection = null;
 
         // Desenha (ou redesenha) o mapa SVG do mundo e recalcula a projeção
         function renderGeoMap() {
@@ -972,6 +972,10 @@
             const width = mapStage.clientWidth;
             const height = mapStage.clientHeight;
             if (!width || !height) return;
+
+            // d3 só fica disponível depois do script deferred correr; select() é criada aqui (lazy),
+            // nunca no arranque do módulo, e reaproveitada nas chamadas seguintes.
+            if (!mapSvgSelection) mapSvgSelection = d3.select(worldMapSvg);
 
             worldMapSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
 
