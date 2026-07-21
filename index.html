@@ -1397,7 +1397,7 @@
                     status: idxStatus !== -1 ? (row[idxStatus] || '').trim() : '',
                     satevo: idxSatevo !== -1 ? (row[idxSatevo] || '').trim() : '',
                     numeroInstalacao: idxNumInst !== -1 ? (row[idxNumInst] || '').trim() : '',
-                    tecnico: (idxTecnico !== -1 && row[idxTecnico]) ? row[idxTecnico].trim() : 'Sem designação',
+                    tecnico: (idxTecnico !== -1 && row[idxTecnico]) ? row[idxTecnico].trim() : '-',
                     lat: isNaN(latVal) ? 0 : latVal,
                     long: isNaN(longVal) ? 0 : longVal,
                     status2: (idxStatus2 !== -1 && row[idxStatus2]) ? row[idxStatus2].trim() : 'Não se aplica',
