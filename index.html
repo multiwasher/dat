@@ -1019,6 +1019,7 @@
 
         let rawData = [];
         let filteredData = [];
+        let concluidaCountsByYear = {};
         let currentStatusFilter = "all";
         let currentCountryFilter = "";
         
@@ -1535,14 +1536,32 @@
         }
 
         function processImportedData(data) {
-            // Ano vigente: a app só mostra registos cuja DATA PRETENDIDA é do ano corrente,
-            // seja qual for o estado (STATUS2). Substitui os filtros de ano por categoria
-            // que existiam antes (DATA INSTALAÇÃO para Concluída, DATA ENC. para Aguardo, etc.).
+            // Ano vigente, por categoria (STATUS2, coluna H):
+            // - Concluída Instalação: DATA INSTALAÇÃO (coluna P) do ano corrente.
+            // - Restantes estados (Aguardo Info Cliente incluído): DATA PRETENDIDA (coluna N) do ano corrente.
             const currentYear = new Date().getFullYear().toString();
+            const isConcluidaStatus = (status2) => {
+                const s = (status2 || '').toUpperCase();
+                return s.includes('CONCLUÍDA') || s.includes('CONCLUIDA');
+            };
 
-            rawData = data
-                .filter(item => isValidLote(item.lote))
-                .filter(item => item.anoPretendida && item.anoPretendida.trim() === currentYear)
+            const validData = data.filter(item => isValidLote(item.lote));
+
+            // Histórico de concluídas por ano (não limitado ao ano vigente) — usado em
+            // PERFORMANCE GLOBAL para comparar o total do ano corrente com o ano anterior (ALVO).
+            concluidaCountsByYear = {};
+            validData.forEach(item => {
+                if (isConcluidaStatus(item.status2) && item.anoInstalacao && item.anoInstalacao.trim()) {
+                    const yr = item.anoInstalacao.trim();
+                    concluidaCountsByYear[yr] = (concluidaCountsByYear[yr] || 0) + 1;
+                }
+            });
+
+            rawData = validData
+                .filter(item => {
+                    const anoRelevante = isConcluidaStatus(item.status2) ? item.anoInstalacao : item.anoPretendida;
+                    return anoRelevante && anoRelevante.trim() === currentYear;
+                })
                 .map((item, idx) => {
                     return {
                         id: 'inst-' + idx,
@@ -1795,7 +1814,7 @@
                 if (isNaN(lat) || isNaN(long)) return;
 
                 // Só desenha Concluída, Em Instalação, Agendada e Aguardar Info
-                // (o ano vigente já é garantido pelo filtro de DATA PRETENDIDA em rawData)
+                // (o ano vigente já é garantido pelo filtro por categoria em rawData)
                 if (!isMapEligibleStatus(item.status2)) return;
 
                 drawnCount++;
@@ -1976,7 +1995,7 @@
         function updateAnalyticalGauge() {
             const dataset = filteredData.length > 0 ? filteredData : rawData;
             // Ano vigente = ano corrente real (dd/mm/AAAA); avança sozinho todos os anos.
-            // (o ano vigente já é garantido pelo filtro de DATA PRETENDIDA em rawData)
+            // (o ano vigente já é garantido pelo filtro por categoria em rawData)
             const currentYear = new Date().getFullYear().toString();
 
             // Helpers de classificação de estado (STATUS2, coluna H)
@@ -2034,26 +2053,17 @@
                 `;
             }).join('');
 
-            // Concluídas por ano — todas as concluídas do dataset, por ano de "DATA INSTALAÇÃO".
-            // Serve de referência histórica: o ano anterior é o ALVO a bater.
-            const completedByYear = {};
-            dataset.forEach(item => {
-                const s = item.status2.toUpperCase();
-                if (isConcluida(s) && item.anoInstalacao && item.anoInstalacao.trim()) {
-                    const yr = item.anoInstalacao.trim();
-                    completedByYear[yr] = (completedByYear[yr] || 0) + 1;
-                }
-            });
-
+            // Concluídas por ano — histórico completo (não limitado ao ano vigente), por ano de
+            // "DATA INSTALAÇÃO". Serve de referência histórica: o ano anterior é o ALVO a bater.
             const prevYear = (parseInt(currentYear, 10) - 1).toString();
-            const alvo = completedByYear[prevYear] || 0;            // total do ano anterior (meta)
-            const atual = completedByYear[currentYear] || 0;        // já concluídas este ano
+            const alvo = concluidaCountsByYear[prevYear] || 0;      // total do ano anterior (meta)
+            const atual = concluidaCountsByYear[currentYear] || 0;  // já concluídas este ano
             const rumoPct = alvo > 0 ? Math.round((atual / alvo) * 100) : 0;
 
             // Mostra apenas o ano vigente
             const yearsContainer = document.getElementById('concluded-years-list');
 
-            if (completedByYear[currentYear] === undefined) {
+            if (concluidaCountsByYear[currentYear] === undefined) {
                 yearsContainer.innerHTML = '<div class="text-[10px] text-slate-500 py-3 text-center">Nenhuma concluída</div>';
             } else {
                 yearsContainer.innerHTML = `
