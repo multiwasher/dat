@@ -855,6 +855,7 @@
                         <span class="lg-item"><i class="lg-dot" style="background:var(--warn)"></i>Em Instalação</span>
                         <span class="lg-item"><i class="lg-dot" style="background:#22d3ee"></i>Agendada</span>
                         <span class="lg-item"><i class="lg-dot" style="background:var(--bad)"></i>Aguardar Info</span>
+                        <span class="lg-item"><i class="lg-dot" style="background:#6366f1"></i>Em Transporte</span>
                     </div>
                 </div>
             </div>
@@ -1676,13 +1677,14 @@
             return 'var(--idle)';
         }
 
-        // O mapa só mostra estas 4 categorias — tudo o resto (Transporte, Sem estado, etc.) fica de fora
+        // O mapa só mostra estas 5 categorias — tudo o resto (Sem estado, etc.) fica de fora
         function isMapEligibleStatus(statusStr) {
             const s = (statusStr || '').toUpperCase();
             return s.includes('CONCLUÍDA') || s.includes('CONCLUIDA')
                 || s.includes('AGUARDO')
                 || s.includes('AGENDADA')
-                || (s.includes('INSTALAÇÃO') && s.includes('EM'));
+                || (s.includes('INSTALAÇÃO') && s.includes('EM'))
+                || s.includes('TRANSPORTE') || s.includes('TRASNPORTE');
         }
 
         function buildTooltipHTML(item, color) {
@@ -1775,9 +1777,10 @@
         function statusPriorityRank(statusStr) {
             const s = (statusStr || '').toUpperCase();
             if (s.includes('AGUARDO')) return 0;
-            if (s.includes('AGENDADA')) return 1;
-            if (s.includes('INSTALAÇÃO') && s.includes('EM')) return 2;
-            return 3; // Concluída
+            if (s.includes('TRANSPORTE') || s.includes('TRASNPORTE')) return 1;
+            if (s.includes('AGENDADA')) return 2;
+            if (s.includes('INSTALAÇÃO') && s.includes('EM')) return 3;
+            return 4; // Concluída
         }
 
         function buildGroupTooltipHTML(items) {
