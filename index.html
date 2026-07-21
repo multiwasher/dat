@@ -1776,10 +1776,10 @@
         // (mesma morada/cadeia) — o ponto herda a cor do estado mais "urgente" do grupo.
         function statusPriorityRank(statusStr) {
             const s = (statusStr || '').toUpperCase();
-            if (s.includes('AGUARDO')) return 0;
+            if (s.includes('INSTALAÇÃO') && s.includes('EM')) return 0;
             if (s.includes('TRANSPORTE') || s.includes('TRASNPORTE')) return 1;
             if (s.includes('AGENDADA')) return 2;
-            if (s.includes('INSTALAÇÃO') && s.includes('EM')) return 3;
+            if (s.includes('AGUARDO')) return 3;
             return 4; // Concluída
         }
 
