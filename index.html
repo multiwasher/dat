@@ -44,6 +44,7 @@
 
             /* Estados */
             --ok: #34D399;
+            --ok-map: #059669;     /* verde mais forte, só para os pontos "Concluída" no mapa */
             --warn: #FBBF24;
             --bad: #F87171;
             --idle: #475067;
@@ -890,7 +891,7 @@
                         </div>
                     </div>
                     <div class="map-legend" aria-label="Legenda de estados">
-                        <span class="lg-item"><i class="lg-dot" style="background:var(--ok)"></i>Concluída</span>
+                        <span class="lg-item"><i class="lg-dot" style="background:var(--ok-map)"></i>Concluída</span>
                         <span class="lg-item"><i class="lg-dot" style="background:var(--warn)"></i>Em Instalação</span>
                         <span class="lg-item"><i class="lg-dot" style="background:#22d3ee"></i>Agendada</span>
                         <span class="lg-item"><i class="lg-dot" style="background:var(--bad)"></i>Aguardar Info</span>
@@ -1709,7 +1710,7 @@
 
         function getStatusColor(statusStr) {
             const s = (statusStr || '').toUpperCase();
-            if (s.includes('CONCLUÍDA') || s.includes('CONCLUIDA')) return 'var(--ok)';
+            if (s.includes('CONCLUÍDA') || s.includes('CONCLUIDA')) return 'var(--ok-map)';
             if (s.includes('AGUARDO')) return 'var(--bad)';
             if (s.includes('AGENDADA')) return '#22d3ee';
             if (s.includes('INSTALAÇÃO') && s.includes('EM')) return 'var(--warn)';
