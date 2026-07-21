@@ -343,21 +343,58 @@
             pointer-events: none;
         }
 
-        /* Pontos simples — a cor segue o estado da instalação, sem glow nem animação */
+        /* Pontos do mapa — orbe com brilho em gradiente + glow na cor do estado
+           e um anel "ping" contínuo e subtil (atraso aleatório via --ping-delay,
+           definido inline por ponto, para não pulsarem todos em sincronia). */
         .pulse-point {
             position: absolute;
-            width: var(--point-size, 9px);
-            height: var(--point-size, 9px);
+            width: var(--point-size, 10px);
+            height: var(--point-size, 10px);
             transform: translate(-50%, -50%);
-            background: var(--pulse-color, var(--acc-1));
-            border: 1px solid rgba(1, 4, 10, 0.6);
             border-radius: 50%;
             cursor: pointer;
             pointer-events: auto;
+            background:
+                radial-gradient(circle at 32% 28%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 45%),
+                var(--pulse-color, var(--acc-1));
+            border: 1.5px solid rgba(255,255,255,0.55);
+            box-shadow:
+                0 0 0 3px rgba(255,255,255,0.05),
+                0 0 8px 1px var(--pulse-color, var(--acc-1)),
+                0 1px 3px rgba(0,0,0,0.55);
+            transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.18s ease;
+            z-index: 1;
+        }
+        .pulse-point::after {
+            content: '';
+            position: absolute;
+            inset: -1px;
+            border-radius: 50%;
+            border: 1.5px solid var(--pulse-color, var(--acc-1));
+            opacity: 0;
+            pointer-events: none;
+            animation: point-ping 2.6s cubic-bezier(0,0,0.2,1) infinite;
+            animation-delay: var(--ping-delay, 0s);
+        }
+        .pulse-point:hover {
+            transform: translate(-50%, -50%) scale(1.4);
+            box-shadow:
+                0 0 0 4px rgba(255,255,255,0.08),
+                0 0 14px 3px var(--pulse-color, var(--acc-1)),
+                0 2px 6px rgba(0,0,0,0.6);
+            z-index: 25;
+        }
+        @keyframes point-ping {
+            0%   { transform: scale(1);   opacity: 0.55; }
+            75%, 100% { transform: scale(2.5); opacity: 0; }
         }
         .pulse-point.point-emphasis {
             transform: translate(-50%, -50%) scale(1.6);
             z-index: 30;
+        }
+        .pulse-point.point-emphasis::after {
+            animation: point-ping 1s cubic-bezier(0,0,0.2,1) infinite;
+            border-width: 2px;
         }
         /* Contador de instalações empilhadas no mesmo local (mesma morada/cadeia) */
         .pulse-badge {
@@ -368,13 +405,15 @@
             height: 13px;
             padding: 0 2px;
             border-radius: 50%;
-            background: #0d1627;
-            border: 1px solid rgba(255,255,255,0.35);
+            background: linear-gradient(155deg, #1b2740 0%, #0a1120 100%);
+            border: 1px solid rgba(255,255,255,0.4);
+            box-shadow: 0 1px 4px rgba(0,0,0,0.65);
             color: #fff;
             font-size: 8px;
             font-weight: 800;
             line-height: 12px;
             text-align: center;
+            z-index: 2;
         }
 
         /* Tooltip flutuante do mapa (substitui os popups do Leaflet) */
@@ -1044,6 +1083,7 @@
             startClock();
             initMap();
             loadSheetData();
+            setInterval(loadSheetData, 30 * 60 * 1000);
         });
 
         function startClock() {
@@ -1841,6 +1881,7 @@
                 point.style.left = `${(projected[0] / width) * 100}%`;
                 point.style.top = `${(projected[1] / height) * 100}%`;
                 point.style.setProperty('--pulse-color', color);
+                point.style.setProperty('--ping-delay', `-${(Math.random() * 2.6).toFixed(2)}s`);
                 point.title = items.length > 1
                     ? `${items.length} instalações — ${representative.cliente} e outras`
                     : `${representative.cliente} — ${representative.status2}`;
