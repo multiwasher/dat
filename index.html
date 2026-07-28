@@ -663,37 +663,27 @@
 
         /* ============================================================= */
         /* ============================================================= */
-        .perf-wrap { display: flex; flex-direction: column; height: 100%; gap: 12px; }
-        .perf-row-top { display: flex; gap: 14px; align-items: center; justify-content: space-between; flex: 0 0 auto; }
-        .perf-row-bottom { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; justify-content: center; border-top: 1px solid var(--line); padding-top: 10px; }
-        .cont-left { flex: 0 0 110px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        
+        .perf-wrap { display: flex; flex-direction: column; height: 100%; }
+        .perf-row-top { display: flex; gap: 22px; align-items: center; justify-content: center; flex: 1 1 auto; height: 100%; }
+        .cont-left { flex: 0 0 132px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+
         /* Circular SVG Gauge */
-        .gaugebox { position: relative; width: 110px; height: 110px; }
+        .gaugebox { position: relative; width: 132px; height: 132px; }
         .gaugebox svg { width: 100%; height: 100%; transform: rotate(-90deg); }
         .gaugebox .circle-bg { fill: none; stroke: rgba(255, 255, 255, 0.04); stroke-width: 8; }
         .gaugebox .circle-bar { fill: none; stroke: url(#gauge-grad); stroke-width: 8; stroke-linecap: round; stroke-dasharray: 251.2; stroke-dashoffset: 251.2; transition: stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1); }
-        
-        .gaugebox .center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .gaugebox .center .g-v { font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 800; line-height: 1; color: #fff; }
-        .gaugebox .center .g-l { font-size: 7px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: var(--txt-mute); margin-top: 3px; }
-        
-        .cont-mid { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
 
-        /* Realce do ano atual na lista "Concluídas por Ano" */
-        .year-row.year-current {
-            background: rgba(81, 184, 234, 0.08);
-            border: 1px solid rgba(81, 184, 234, 0.25);
-            border-radius: 7px;
-            padding: 5px 7px;
-            margin-bottom: 3px;
-        }
-        
+        .gaugebox .center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .gaugebox .center .g-v { font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 800; line-height: 1; color: #fff; }
+        .gaugebox .center .g-l { font-size: 8px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: var(--txt-mute); margin-top: 4px; }
+
+        .cont-mid { flex: 1 1 0; min-width: 0; max-width: 260px; display: flex; flex-direction: column; justify-content: center; gap: 16px; }
+
         .cat { }
-        .cat .crow { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
-        .cat .cname { font-size: 8.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--txt-mute); }
-        .cat .cval { font-family: 'JetBrains Mono', monospace; font-size: 9.5px; font-weight: 700; color: #fff; }
-        .cat .cbar { height: 5px; border-radius: 6px; background: rgba(0,0,0,0.3); overflow: hidden; }
+        .cat .crow { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+        .cat .cname { font-size: 9.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--txt-mute); }
+        .cat .cval { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; color: #fff; }
+        .cat .cbar { height: 6px; border-radius: 6px; background: rgba(0,0,0,0.3); overflow: hidden; }
         .cat .cbar > i { display: block; height: 100%; border-radius: 6px; transition: width 0.8s ease-out; }
 
         .drawer-toggle {
@@ -986,13 +976,6 @@
 
                             <div class="cont-mid" id="performance-categories-list"></div>
                         </div>
-
-                        <div class="perf-row-bottom">
-                            <div class="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-700/50 pb-1">
-                                Concluídas por Ano
-                            </div>
-                            <div class="flex-1 flex flex-col justify-center" id="concluded-years-list"></div>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -1060,7 +1043,6 @@
 
         let rawData = [];
         let filteredData = [];
-        let concluidaCountsByYear = {};
         let currentStatusFilter = "all";
         let currentCountryFilter = "";
         
@@ -1589,16 +1571,6 @@
 
             const validData = data.filter(item => isValidLote(item.lote));
 
-            // Histórico de concluídas por ano (não limitado ao ano vigente) — usado em
-            // PERFORMANCE GLOBAL para comparar o total do ano corrente com o ano anterior (ALVO).
-            concluidaCountsByYear = {};
-            validData.forEach(item => {
-                if (isConcluidaStatus(item.status2) && item.anoInstalacao && item.anoInstalacao.trim()) {
-                    const yr = item.anoInstalacao.trim();
-                    concluidaCountsByYear[yr] = (concluidaCountsByYear[yr] || 0) + 1;
-                }
-            });
-
             rawData = validData
                 .filter(item => {
                     const anoRelevante = isConcluidaStatus(item.status2) ? item.anoInstalacao : item.anoPretendida;
@@ -2097,29 +2069,6 @@
                     </div>
                 `;
             }).join('');
-
-            // Concluídas por ano — histórico completo (não limitado ao ano vigente), por ano de
-            // "DATA INSTALAÇÃO". Serve de referência histórica: o ano anterior é o ALVO a bater.
-            const prevYear = (parseInt(currentYear, 10) - 1).toString();
-            const alvo = concluidaCountsByYear[prevYear] || 0;      // total do ano anterior (meta)
-            const atual = concluidaCountsByYear[currentYear] || 0;  // já concluídas este ano
-            const rumoPct = alvo > 0 ? Math.round((atual / alvo) * 100) : 0;
-
-            // Mostra apenas o ano vigente
-            const yearsContainer = document.getElementById('concluded-years-list');
-
-            if (concluidaCountsByYear[currentYear] === undefined) {
-                yearsContainer.innerHTML = '<div class="text-[10px] text-slate-500 py-3 text-center">Nenhuma concluída</div>';
-            } else {
-                yearsContainer.innerHTML = `
-                    <div class="year-row year-current flex flex-col gap-1.5">
-                        <div class="flex items-center justify-between font-bold text-[15px]">
-                            <span class="text-[var(--acc-1)]">${currentYear} • Atual</span>
-                            <span class="mono text-[var(--ok)]">${atual} un.${alvo > 0 ? ` <span class="text-slate-400">/ ${alvo} (${rumoPct}%)</span>` : ''}</span>
-                        </div>
-                    </div>
-                `;
-            }
         }
 
         function focusOnMarker(id, lat, long) {
