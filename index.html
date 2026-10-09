@@ -1040,7 +1040,7 @@
         // headers=1 é essencial: sem isto, o Google por vezes deteta mal quantas linhas
         // são cabeçalho e mistura texto de linhas de dados na 1ª linha do CSV.
         const CSV_EXPORT_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(SHEET_TAB_NAME)}&headers=1`;
-
+        //https://docs.google.com/spreadsheets/d/1w-2Umjj5Y-N0Xzh98C2lKj7wiLYlMte6k6LPhAMmGp4/edit?usp=sharing
         let rawData = [];
         let filteredData = [];
         let currentStatusFilter = "all";
